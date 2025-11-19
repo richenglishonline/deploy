@@ -1,63 +1,56 @@
 #!/bin/bash
 # Create storage symlink manually for Hostinger deployment
 # This script should be run on the server via SSH
-# For _public_html structure where index.php is at root
+# Works for both standard Laravel and _public_html structures
 
 cd "$(dirname "$0")"
 
-# Check if we're in _public_html structure (index.php at root)
-if [ -f "index.php" ] && [ -d "storage" ]; then
-    # _public_html structure: storage link at root level
-    STORAGE_LINK="storage_link"
-    STORAGE_TARGET="storage/app/public"
-    
+# Laravel expects the storage link at public/storage pointing to storage/app/public
+# This works for both standard Laravel and _public_html (which has public/ directory)
+
+if [ -d "public" ] && [ -d "storage/app/public" ]; then
     # Remove existing link if it exists
-    if [ -L "$STORAGE_LINK" ] || [ -L "storage" ]; then
-        echo "Removing existing storage link..."
-        [ -L "$STORAGE_LINK" ] && rm "$STORAGE_LINK"
-        [ -L "storage" ] && rm "storage"
-    fi
-    
-    # Create the symlink at root level
-    echo "Creating storage symlink at root level..."
-    ln -s "$STORAGE_TARGET" "$STORAGE_LINK"
-    
-    # Also create storage symlink if public_path() points to root
-    if [ ! -L "storage" ]; then
-        # Backup storage directory if it's a real directory
-        if [ -d "storage" ] && [ ! -L "storage" ]; then
-            echo "Note: storage/ is a directory, not a symlink"
-        fi
-    fi
-    
-    # Verify the link was created
-    if [ -L "$STORAGE_LINK" ]; then
-        echo "✓ Storage symlink created successfully at root level!"
-        ls -la "$STORAGE_LINK"
-    else
-        echo "✗ Failed to create storage symlink"
-        exit 1
-    fi
-elif [ -d "public" ]; then
-    # Standard Laravel structure: storage link in public directory
     if [ -L "public/storage" ]; then
         echo "Removing existing storage link..."
         rm public/storage
     fi
     
-    echo "Creating storage symlink in public directory..."
+    # Create the symlink in public directory
+    echo "Creating storage symlink: public/storage -> storage/app/public"
     ln -s ../storage/app/public public/storage
     
+    # Verify the link was created
     if [ -L "public/storage" ]; then
-        echo "✓ Storage symlink created successfully in public directory!"
+        echo "✓ Storage symlink created successfully!"
+        echo "Link details:"
         ls -la public/storage
+    else
+        echo "✗ Failed to create storage symlink"
+        exit 1
+    fi
+elif [ -f "index.php" ] && [ -d "storage/app/public" ]; then
+    # _public_html structure without public/ directory (unlikely but handle it)
+    echo "Warning: No public/ directory found, but index.php exists at root"
+    echo "Creating storage symlink at root level as fallback..."
+    
+    if [ -L "storage_link" ]; then
+        rm storage_link
+    fi
+    
+    ln -s storage/app/public storage_link
+    
+    if [ -L "storage_link" ]; then
+        echo "✓ Storage symlink created at root level (storage_link)"
+        ls -la storage_link
+        echo "Note: You may need to adjust config/filesystems.php to use this location"
     else
         echo "✗ Failed to create storage symlink"
         exit 1
     fi
 else
     echo "✗ Could not determine directory structure"
-    echo "Expected either index.php at root or public/ directory"
+    echo "Expected:"
+    echo "  - public/ directory with storage/app/public directory, OR"
+    echo "  - index.php at root with storage/app/public directory"
     exit 1
 fi
-
