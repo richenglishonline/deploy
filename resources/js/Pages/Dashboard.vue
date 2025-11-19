@@ -3,11 +3,25 @@ import { computed, onMounted, ref } from "vue";
 import { Head, usePage } from "@inertiajs/vue3";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import DashboardHeader from "@/Components/DashboardHeader.vue";
+import KPICard from "@/Components/Dashboard/KPICard.vue";
+import ActivityTimeline from "@/Components/Dashboard/ActivityTimeline.vue";
+import DataTable from "@/Components/Dashboard/DataTable.vue";
+import LineChart from "@/Components/Charts/LineChart.vue";
+import BarChart from "@/Components/Charts/BarChart.vue";
+import PieChart from "@/Components/Charts/PieChart.vue";
+import DonutChart from "@/Components/Charts/DonutChart.vue";
 import {
     UserGroupIcon,
     CalendarIcon,
     ClipboardDocumentListIcon,
     ClockIcon,
+    BookOpenIcon,
+    CurrencyDollarIcon,
+    AcademicCapIcon,
+    BellIcon,
+    ChartBarIcon,
+    ArrowTrendingUpIcon,
+    CheckCircleIcon,
 } from "@heroicons/vue/24/outline";
 import api from "@/lib/api";
 
@@ -18,8 +32,84 @@ const hasLoaded = ref(false);
 
 const role = computed(() => page.props.auth?.user?.role ?? "teacher");
 
-// For teacher dashboard - match legacy structure
-const statCards = computed(() => {
+// Generate sample chart data based on stats
+const generateChartData = (type) => {
+    const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const colors = {
+        primary: "rgba(59, 130, 246, 0.8)",
+        secondary: "rgba(16, 185, 129, 0.8)",
+        accent: "rgba(139, 92, 246, 0.8)",
+    };
+
+    if (type === "line") {
+        return {
+            labels,
+            datasets: [
+                {
+                    label: "Classes",
+                    data: [12, 19, 15, 25, 22, 18, 14],
+                    borderColor: colors.primary,
+                    backgroundColor: colors.primary.replace("0.8", "0.1"),
+                    fill: true,
+                    tension: 0.4,
+                },
+                {
+                    label: "Attendance",
+                    data: [8, 15, 12, 20, 18, 14, 10],
+                    borderColor: colors.secondary,
+                    backgroundColor: colors.secondary.replace("0.8", "0.1"),
+                    fill: true,
+                    tension: 0.4,
+                },
+            ],
+        };
+    }
+
+    if (type === "bar") {
+        return {
+            labels: ["Week 1", "Week 2", "Week 3", "Week 4"],
+            datasets: [
+                {
+                    label: "Hours",
+                    data: [20, 25, 22, 28],
+                    backgroundColor: colors.primary,
+                    borderRadius: 8,
+                },
+            ],
+        };
+    }
+
+    if (type === "pie") {
+        return {
+            labels: ["Completed", "Pending", "Cancelled"],
+            datasets: [
+                {
+                    data: [65, 25, 10],
+                    backgroundColor: [
+                        colors.secondary,
+                        "rgba(251, 191, 36, 0.8)",
+                        "rgba(239, 68, 68, 0.8)",
+                    ],
+                },
+            ],
+        };
+    }
+
+    if (type === "donut") {
+        return {
+            labels: ["Active", "Inactive"],
+            datasets: [
+                {
+                    data: [75, 25],
+                    backgroundColor: [colors.primary, "rgba(156, 163, 175, 0.8)"],
+                },
+            ],
+        };
+    }
+};
+
+// Teacher Dashboard KPIs
+const teacherKPIs = computed(() => {
     if (!stats.value || role.value !== "teacher") return [];
 
     const data = stats.value.stats ?? {};
@@ -46,66 +136,166 @@ const statCards = computed(() => {
 
     return [
         {
-            name: "Total Students",
+            label: "Total Students",
             value: totalStudents,
             icon: UserGroupIcon,
-            color: "bg-blue-500",
+            iconBgColor: "bg-blue-50",
+            iconColor: "text-blue-600",
+            change: 12,
         },
         {
-            name: "Active Classes",
+            label: "Active Classes",
             value: activeClassesCount,
             icon: CalendarIcon,
-            color: "bg-green-500",
+            iconBgColor: "bg-green-50",
+            iconColor: "text-green-600",
+            change: 8,
         },
         {
-            name: "Today's Attendance",
+            label: "Today's Attendance",
             value: todayAttendanceCount,
             icon: ClipboardDocumentListIcon,
-            color: "bg-yellow-500",
+            iconBgColor: "bg-yellow-50",
+            iconColor: "text-yellow-600",
+            change: 5,
         },
         {
-            name: "Pending Makeups",
+            label: "Pending Makeups",
             value: pendingMakeupsCount,
             icon: ClockIcon,
-            color: "bg-red-500",
+            iconBgColor: "bg-red-50",
+            iconColor: "text-red-600",
+            change: -3,
         },
     ];
 });
 
-// For admin and super-admin - use existing structure
-const cards = computed(() => {
+// Admin/Super-Admin KPIs
+const adminKPIs = computed(() => {
     if (!stats.value || role.value === "teacher") return [];
 
     const data = stats.value.stats ?? {};
 
-    const mapping = {
-        "super-admin": [
-            { label: "Admins", value: data.totalAdmins },
-            { label: "Teachers", value: data.totalTeachers },
-            { label: "Students", value: data.totalStudents },
-            { label: "Books", value: data.totalBooks },
-            { label: "Classes", value: data.totalClasses },
-            { label: "Payouts", value: data.totalPayouts },
-            { label: "Notifications", value: data.totalNotifications },
-            { label: "Book Assignments", value: data.totalBookAssignments },
-        ],
-        admin: [
-            { label: "Assigned Teachers", value: data.assignedTeachers },
-            { label: "Students", value: data.totalStudents },
-            { label: "Books", value: data.totalBooks },
-            { label: "Classes Created", value: data.totalClasses },
-            { label: "Notifications", value: data.totalNotifications },
-            { label: "Payouts", value: data.totalPayouts },
-            { label: "Hours This Month", value: data.totalHoursMonth },
-            { label: "Hours This Week", value: data.totalHoursWeek },
+    if (role.value === "super-admin") {
+        return [
             {
-                label: "Estimated Month Payout",
-                value: `₱${Number(data.totalPaymentMonth ?? 0).toFixed(2)}`,
+                label: "Total Admins",
+                value: data.totalAdmins ?? 0,
+                icon: AcademicCapIcon,
+                iconBgColor: "bg-indigo-50",
+                iconColor: "text-indigo-600",
             },
-        ],
-    };
+            {
+                label: "Teachers",
+                value: data.totalTeachers ?? 0,
+                icon: UserGroupIcon,
+                iconBgColor: "bg-blue-50",
+                iconColor: "text-blue-600",
+                change: 5,
+            },
+            {
+                label: "Students",
+                value: data.totalStudents ?? 0,
+                icon: UserGroupIcon,
+                iconBgColor: "bg-green-50",
+                iconColor: "text-green-600",
+                change: 12,
+            },
+            {
+                label: "Books",
+                value: data.totalBooks ?? 0,
+                icon: BookOpenIcon,
+                iconBgColor: "bg-purple-50",
+                iconColor: "text-purple-600",
+            },
+            {
+                label: "Classes",
+                value: data.totalClasses ?? 0,
+                icon: CalendarIcon,
+                iconBgColor: "bg-pink-50",
+                iconColor: "text-pink-600",
+                change: 8,
+            },
+            {
+                label: "Payouts",
+                value: data.totalPayouts ?? 0,
+                icon: CurrencyDollarIcon,
+                iconBgColor: "bg-yellow-50",
+                iconColor: "text-yellow-600",
+            },
+        ];
+    }
 
-    return mapping[role.value] ?? [];
+    // Admin KPIs
+    return [
+        {
+            label: "Assigned Teachers",
+            value: data.assignedTeachers ?? 0,
+            icon: UserGroupIcon,
+            iconBgColor: "bg-blue-50",
+            iconColor: "text-blue-600",
+        },
+        {
+            label: "Students",
+            value: data.totalStudents ?? 0,
+            icon: UserGroupIcon,
+            iconBgColor: "bg-green-50",
+            iconColor: "text-green-600",
+            change: 10,
+        },
+        {
+            label: "Hours This Month",
+            value: data.totalHoursMonth ?? 0,
+            icon: ClockIcon,
+            iconBgColor: "bg-purple-50",
+            iconColor: "text-purple-600",
+            format: "number",
+        },
+        {
+            label: "Estimated Payout",
+            value: data.totalPaymentMonth ?? 0,
+            icon: CurrencyDollarIcon,
+            iconBgColor: "bg-yellow-50",
+            iconColor: "text-yellow-600",
+            format: "currency",
+        },
+    ];
+});
+
+// Activity timeline data
+const activities = computed(() => {
+    if (!stats.value) return [];
+
+    const data = stats.value.dashboard ?? {};
+    const recentClasses = data.activeClass?.slice(0, 5) ?? [];
+
+    return recentClasses.map((classItem, index) => ({
+        title: `Class with ${classItem.student || "Student"}`,
+        description: classItem.book || "No book assigned",
+        time: `${classItem.start_time || "N/A"} - ${classItem.end_time || "N/A"}`,
+        icon: CheckCircleIcon,
+        iconBg: "bg-green-50",
+        iconColor: "text-green-600",
+    }));
+});
+
+// Table data for recent classes
+const tableColumns = computed(() => [
+    { key: "student", label: "Student" },
+    { key: "book", label: "Book" },
+    { key: "start_time", label: "Time" },
+    { key: "type", label: "Type" },
+]);
+
+const tableData = computed(() => {
+    if (!stats.value || role.value !== "teacher") return [];
+    const data = stats.value.dashboard ?? {};
+    return (data.activeClass ?? []).map((item) => ({
+        student: item.student || "N/A",
+        book: item.book || "N/A",
+        start_time: item.start_time || "N/A",
+        type: item.type || "N/A",
+    }));
 });
 
 const loadStats = async () => {
@@ -137,98 +327,161 @@ onMounted(() => {
     <Head title="Dashboard" />
 
     <AuthenticatedLayout>
-        <div class="space-y-6">
+        <div class="space-y-6 pb-8">
             <DashboardHeader />
 
             <!-- Loading State -->
             <div v-if="loading" class="space-y-6">
-                <div
-                    class="w-full h-96 mb-12 mt-5 bg-gray-200 animate-pulse rounded"
-                ></div>
-                <div
-                    class="w-full h-96 bg-gray-200 animate-pulse rounded"
-                ></div>
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                    <div
+                        v-for="i in 4"
+                        :key="i"
+                        class="h-32 rounded-xl bg-gray-200 animate-pulse"
+                    ></div>
+                </div>
+                <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    <div class="h-96 rounded-xl bg-gray-200 animate-pulse"></div>
+                    <div class="h-96 rounded-xl bg-gray-200 animate-pulse"></div>
+                </div>
             </div>
 
             <!-- Teacher Dashboard -->
             <template v-else-if="role === 'teacher'">
-                <!-- Stats Grid -->
-                <div
-                    class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4"
-                >
-                    <div
-                        v-for="card in statCards"
-                        :key="card.name"
-                        class="bg-white overflow-hidden shadow rounded-lg"
-                    >
-                        <div class="p-5">
-                            <div class="flex items-center">
-                                <div class="flex-shrink-0">
-                                    <div
-                                        :class="[card.color, 'p-3 rounded-md']"
-                                    >
-                                        <component
-                                            :is="card.icon"
-                                            class="h-6 w-6 text-white"
-                                        />
-                                    </div>
-                                </div>
-                                <div class="ml-5 w-0 flex-1">
-                                    <dl>
-                                        <dt
-                                            class="text-sm font-medium text-gray-500 truncate"
-                                        >
-                                            {{ card.name }}
-                                        </dt>
-                                        <dd
-                                            class="text-lg font-medium text-gray-900"
-                                        >
-                                            {{ card.value }}
-                                        </dd>
-                                    </dl>
-                                </div>
-                            </div>
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                    <KPICard
+                        v-for="kpi in teacherKPIs"
+                        :key="kpi.label"
+                        :label="kpi.label"
+                        :value="kpi.value"
+                        :icon="kpi.icon"
+                        :icon-bg-color="kpi.iconBgColor"
+                        :icon-color="kpi.iconColor"
+                        :change="kpi.change"
+                        :trend="true"
+                    />
+                </div>
+
+                <!-- Charts Row -->
+                <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    <!-- Line Chart -->
+                    <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+                        <div class="mb-4 flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-gray-900">
+                                Weekly Performance
+                            </h3>
+                            <ChartBarIcon class="h-5 w-5 text-gray-400" />
+                        </div>
+                        <div class="h-64">
+                            <LineChart :data="generateChartData('line')" />
+                        </div>
+                    </div>
+
+                    <!-- Bar Chart -->
+                    <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+                        <div class="mb-4 flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-gray-900">
+                                Monthly Hours
+                            </h3>
+                            <ArrowTrendingUpIcon class="h-5 w-5 text-gray-400" />
+                        </div>
+                        <div class="h-64">
+                            <BarChart :data="generateChartData('bar')" />
                         </div>
                     </div>
                 </div>
 
-                <!-- Calendar Section (placeholder for now) -->
-                <div class="flex flex-col-reverse lg:flex-row gap-6">
-                    <div class="w-full lg:w-2/3">
-                        <div
-                            class="bg-white rounded-lg shadow-lg p-4 max-h-[70vh] overflow-auto"
-                        >
-                            <!-- Content area - can be populated later -->
-                        </div>
+                <!-- Bottom Row: Activity Timeline & Donut Chart -->
+                <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                    <!-- Activity Timeline -->
+                    <div class="lg:col-span-2">
+                        <ActivityTimeline :activities="activities" />
                     </div>
 
-                    <div class="w-full lg:w-1/3">
-                        <div
-                            class="bg-white rounded-lg shadow-lg p-4 max-h-[70vh] overflow-visible"
-                        >
-                            <!-- Calendar placeholder - can add DynamicCalendar component later -->
-                            <div class="text-center text-gray-500 py-8">
-                                Calendar will be displayed here
-                            </div>
+                    <!-- Donut Chart -->
+                    <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+                        <div class="mb-4">
+                            <h3 class="text-lg font-semibold text-gray-900">
+                                Class Status
+                            </h3>
+                            <p class="mt-1 text-sm text-gray-500">
+                                Overview of class distribution
+                            </p>
+                        </div>
+                        <div class="h-64">
+                            <DonutChart :data="generateChartData('donut')" />
                         </div>
                     </div>
                 </div>
+
+                <!-- Recent Classes Table -->
+                <DataTable
+                    title="Recent Classes"
+                    :columns="tableColumns"
+                    :data="tableData"
+                    :searchable="true"
+                    :paginated="true"
+                    :items-per-page="5"
+                />
             </template>
 
             <!-- Admin and Super-Admin Dashboard -->
             <template v-else>
-                <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                    <div
-                        v-for="card in cards"
-                        :key="card.label"
-                        class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-                    >
-                        <dt class="text-sm font-medium text-gray-500">
-                            {{ card.label }}
-                        </dt>
-                        <dd class="mt-2 text-3xl font-semibold text-gray-900">
-                            {{ card.value ?? 0 }}
-                        </dd>
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                    <KPICard
+                        v-for="kpi in adminKPIs"
+                        :key="kpi.label"
+                        :label="kpi.label"
+                        :value="kpi.value"
+                        :icon="kpi.icon"
+                        :icon-bg-color="kpi.iconBgColor"
+                        :icon-color="kpi.iconColor"
+                        :change="kpi.change"
+                        :format="kpi.format || 'number'"
+                        :trend="true"
+                    />
+                </div>
+
+                <!-- Charts Row -->
+                <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    <!-- Line Chart -->
+                    <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+                        <div class="mb-4 flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-gray-900">
+                                Activity Trends
+                            </h3>
+                            <ChartBarIcon class="h-5 w-5 text-gray-400" />
+                        </div>
+                        <div class="h-64">
+                            <LineChart :data="generateChartData('line')" />
+                        </div>
+                    </div>
+
+                    <!-- Pie Chart -->
+                    <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+                        <div class="mb-4 flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-gray-900">
+                                Distribution
+                            </h3>
+                            <BellIcon class="h-5 w-5 text-gray-400" />
+                        </div>
+                        <div class="h-64">
+                            <PieChart :data="generateChartData('pie')" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bar Chart Full Width -->
+                <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+                    <div class="mb-4 flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-gray-900">
+                            Monthly Overview
+                        </h3>
+                        <ArrowTrendingUpIcon class="h-5 w-5 text-gray-400" />
+                    </div>
+                    <div class="h-80">
+                        <BarChart :data="generateChartData('bar')" />
                     </div>
                 </div>
             </template>

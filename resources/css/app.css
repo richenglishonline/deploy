@@ -66,7 +66,19 @@
     * {
         @apply border-border;
     }
+    
     body {
-        @apply bg-background text-foreground;
+        @apply antialiased bg-background text-foreground;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    
+    /* Smooth scrolling */
+    html {
+        scroll-behavior: smooth;
+    }
+    
+    /* Focus styles */
+    *:focus-visible {
+        @apply outline-none ring-2 ring-blue-500 ring-offset-2;
     }
 }
