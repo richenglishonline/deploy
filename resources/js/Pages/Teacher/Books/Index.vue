@@ -116,7 +116,7 @@ onMounted(fetchBooks);
         </template>
 
         <div class="py-10">
-            <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-[95%] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="grid gap-6 lg:grid-cols-3">
                     <div
                         class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm lg:col-span-2"
