@@ -57,9 +57,15 @@ try {
         execSync(`git commit -m "${commitMessage}"`, { cwd: rootDir, stdio: 'inherit' });
 
         console.log('✅ Changes committed successfully!');
+
+        // Push changes to remote repository
+        console.log('🚀 Pushing changes to origin main...');
+        execSync('git push origin main', { cwd: rootDir, stdio: 'inherit' });
+
+        console.log('✅ Changes pushed successfully!');
     } catch (gitError) {
         // Don't fail the build if git commands fail (e.g., no changes, not a git repo)
-        console.warn('⚠️  Git commit skipped:', gitError.message);
+        console.warn('⚠️  Git operation skipped:', gitError.message);
         console.log('   (This is normal if there are no changes or not in a git repository)');
     }
 } catch (error) {
