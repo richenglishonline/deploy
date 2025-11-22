@@ -9,12 +9,13 @@ import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import {
     Chart as ChartJS,
     ArcElement,
+    DoughnutController,
     Tooltip,
     Legend,
 } from 'chart.js';
 // Using Chart.js directly
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+ChartJS.register(ArcElement, DoughnutController, Tooltip, Legend);
 
 const props = defineProps({
     data: {
