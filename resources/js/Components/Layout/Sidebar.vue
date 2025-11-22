@@ -93,7 +93,6 @@
 <script setup>
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { route } from 'ziggy-js';
 import {
     HomeIcon,
     UserGroupIcon,
@@ -134,78 +133,96 @@ const userInitials = computed(() => {
         .slice(0, 2);
 });
 
+const currentUrl = computed(() => page.url);
+
 const isActive = (href) => {
-    if (typeof window === 'undefined') return false;
-    const currentPath = window.location.pathname;
-    return currentPath === href || currentPath.startsWith(href + '/');
+    if (!href) return false;
+    // Extract path from href (handle both URLs and paths)
+    const hrefPath = href.replace(/^https?:\/\/[^/]+/, '').split('?')[0].split('#')[0];
+    const currentPath = currentUrl.value.split('?')[0].split('#')[0];
+    
+    if (currentPath === hrefPath) return true;
+    if (hrefPath !== '/' && currentPath.startsWith(hrefPath + '/')) return true;
+    return false;
 };
 
 const navigationSections = computed(() => {
     const role = user.value?.role || 'teacher';
     
-    try {
-        const baseItems = [
-            { name: 'Dashboard', href: route('dashboard'), icon: HomeIcon },
+    const baseItems = [
+        { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
+    ];
+
+    if (role === 'teacher') {
+        return [
+            {
+                label: 'Main',
+                items: [
+                    ...baseItems,
+                    { name: 'Schedule', href: '/schedule', icon: CalendarIcon },
+                    { name: 'Classes', href: '/classes', icon: AcademicCapIcon },
+                    { name: 'Books', href: '/books', icon: BookOpenIcon },
+                    { name: 'Attendance', href: '/attendance', icon: ClipboardDocumentListIcon },
+                ],
+            },
+            {
+                label: 'Other',
+                items: [
+                    { name: 'Recordings', href: '/recordings', icon: ChartBarIcon },
+                    { name: 'Screenshots', href: '/screenshots', icon: ChartBarIcon },
+                    { name: 'Notifications', href: '/notifications', icon: BellIcon, badge: '3' },
+                ],
+            },
         ];
-
-        if (role === 'teacher') {
-            return [
-                {
-                    label: 'Main',
-                    items: [
-                        ...baseItems,
-                        { name: 'Schedule', href: route('schedule.index'), icon: CalendarIcon },
-                        { name: 'Classes', href: route('classes.index'), icon: AcademicCapIcon },
-                        { name: 'Students', href: route('students.index'), icon: UserGroupIcon },
-                        { name: 'Books', href: route('books.index'), icon: BookOpenIcon },
-                        { name: 'Attendance', href: route('attendance.index'), icon: ClipboardDocumentListIcon },
-                        { name: 'Salary', href: route('salary.index'), icon: CurrencyDollarIcon },
-                    ],
-                },
-                {
-                    label: 'Other',
-                    items: [
-                        { name: 'Recordings', href: route('recordings.index'), icon: ChartBarIcon },
-                        { name: 'Screenshots', href: route('screenshots.index'), icon: ChartBarIcon },
-                        { name: 'Notifications', href: route('notifications.index'), icon: BellIcon, badge: '3' },
-                        { name: 'Settings', href: route('settings.index'), icon: Cog6ToothIcon },
-                    ],
-                },
-            ];
-        }
-
-        if (role === 'admin' || role === 'super-admin') {
-            return [
-                {
-                    label: 'Main',
-                    items: [
-                        ...baseItems,
-                        { name: 'Teachers', href: route('teachers.index'), icon: AcademicCapIcon },
-                        { name: 'Students', href: route('students.index'), icon: UserGroupIcon },
-                        { name: 'Classes', href: route('classes.index'), icon: CalendarIcon },
-                        { name: 'Books', href: route('books.index'), icon: BookOpenIcon },
-                        { name: 'Attendance', href: route('attendance.index'), icon: ClipboardDocumentListIcon },
-                    ],
-                },
-                {
-                    label: 'Management',
-                    items: [
-                        { name: 'Payouts', href: route('payouts.index'), icon: CurrencyDollarIcon },
-                        { name: 'Reports', href: route('reports.index'), icon: ChartBarIcon },
-                        { name: 'Settings', href: route('settings.index'), icon: Cog6ToothIcon },
-                    ],
-                },
-            ];
-        }
-
-        return [{ items: baseItems }];
-    } catch (e) {
-        // Fallback to simple paths if routes aren't available
-        const baseItems = [
-            { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-        ];
-        return [{ items: baseItems }];
     }
+
+    if (role === 'admin') {
+        return [
+            {
+                label: 'Main',
+                items: [
+                    ...baseItems,
+                    { name: 'Teachers', href: '/teachers', icon: AcademicCapIcon },
+                    { name: 'Students', href: '/students', icon: UserGroupIcon },
+                    { name: 'Classes', href: '/classes', icon: CalendarIcon },
+                    { name: 'Books', href: '/books', icon: BookOpenIcon },
+                    { name: 'Attendance', href: '/attendance', icon: ClipboardDocumentListIcon },
+                ],
+            },
+            {
+                label: 'Management',
+                items: [
+                    { name: 'Reports', href: '/reports', icon: ChartBarIcon },
+                ],
+            },
+        ];
+    }
+
+    if (role === 'super-admin') {
+        return [
+            {
+                label: 'Main',
+                items: [
+                    ...baseItems,
+                    { name: 'Teachers', href: '/teachers', icon: AcademicCapIcon },
+                    { name: 'Students', href: '/students', icon: UserGroupIcon },
+                    { name: 'Classes', href: '/classes', icon: CalendarIcon },
+                    { name: 'Books', href: '/books', icon: BookOpenIcon },
+                    { name: 'Attendance', href: '/attendance', icon: ClipboardDocumentListIcon },
+                ],
+            },
+            {
+                label: 'Management',
+                items: [
+                    { name: 'Payouts', href: '/payouts', icon: CurrencyDollarIcon },
+                    { name: 'Reports', href: '/reports', icon: ChartBarIcon },
+                    { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
+                ],
+            },
+        ];
+    }
+
+    return [{ items: baseItems }];
 });
 </script>
 
