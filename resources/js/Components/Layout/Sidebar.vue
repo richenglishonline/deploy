@@ -148,28 +148,24 @@ const isActive = (href) => {
 
 const navigationSections = computed(() => {
     const role = user.value?.role || 'teacher';
-    
-    const baseItems = [
-        { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-    ];
 
     if (role === 'teacher') {
         return [
             {
                 label: 'Main',
                 items: [
-                    ...baseItems,
-                    { name: 'Schedule', href: '/schedule', icon: CalendarIcon },
-                    { name: 'Classes', href: '/classes', icon: AcademicCapIcon },
-                    { name: 'Books', href: '/books', icon: BookOpenIcon },
-                    { name: 'Attendance', href: '/attendance', icon: ClipboardDocumentListIcon },
+                    { name: 'Dashboard', href: '/teacher/dashboard', icon: HomeIcon },
+                    { name: 'Schedule', href: '/teacher/schedule', icon: CalendarIcon },
+                    { name: 'Classes', href: '/teacher/classes', icon: AcademicCapIcon },
+                    { name: 'Books', href: '/teacher/books', icon: BookOpenIcon },
+                    { name: 'Attendance', href: '/teacher/attendance', icon: ClipboardDocumentListIcon },
                 ],
             },
             {
                 label: 'Other',
                 items: [
-                    { name: 'Recordings', href: '/recordings', icon: ChartBarIcon },
-                    { name: 'Screenshots', href: '/screenshots', icon: ChartBarIcon },
+                    { name: 'Recordings', href: '/teacher/recordings', icon: ChartBarIcon },
+                    { name: 'Screenshots', href: '/teacher/screenshots', icon: ChartBarIcon },
                     { name: 'Notifications', href: '/notifications', icon: BellIcon, badge: '3' },
                 ],
             },
@@ -181,18 +177,18 @@ const navigationSections = computed(() => {
             {
                 label: 'Main',
                 items: [
-                    ...baseItems,
-                    { name: 'Teachers', href: '/teachers', icon: AcademicCapIcon },
-                    { name: 'Students', href: '/students', icon: UserGroupIcon },
-                    { name: 'Classes', href: '/classes', icon: CalendarIcon },
-                    { name: 'Books', href: '/books', icon: BookOpenIcon },
-                    { name: 'Attendance', href: '/attendance', icon: ClipboardDocumentListIcon },
+                    { name: 'Dashboard', href: '/admin/dashboard', icon: HomeIcon },
+                    { name: 'Teachers', href: '/admin/teachers', icon: AcademicCapIcon },
+                    { name: 'Students', href: '/admin/students', icon: UserGroupIcon },
+                    { name: 'Classes', href: '/admin/classes', icon: CalendarIcon },
+                    { name: 'Books', href: '/admin/books', icon: BookOpenIcon },
+                    { name: 'Attendance', href: '/admin/attendance', icon: ClipboardDocumentListIcon },
                 ],
             },
             {
                 label: 'Management',
                 items: [
-                    { name: 'Reports', href: '/reports', icon: ChartBarIcon },
+                    { name: 'Reports', href: '/admin/reports', icon: ChartBarIcon },
                 ],
             },
         ];
@@ -203,26 +199,27 @@ const navigationSections = computed(() => {
             {
                 label: 'Main',
                 items: [
-                    ...baseItems,
-                    { name: 'Teachers', href: '/teachers', icon: AcademicCapIcon },
-                    { name: 'Students', href: '/students', icon: UserGroupIcon },
-                    { name: 'Classes', href: '/classes', icon: CalendarIcon },
-                    { name: 'Books', href: '/books', icon: BookOpenIcon },
-                    { name: 'Attendance', href: '/attendance', icon: ClipboardDocumentListIcon },
+                    { name: 'Dashboard', href: '/super-admin/dashboard', icon: HomeIcon },
+                    { name: 'Teachers', href: '/super-admin/teachers', icon: AcademicCapIcon },
+                    { name: 'Students', href: '/super-admin/students', icon: UserGroupIcon },
+                    { name: 'Classes', href: '/super-admin/classes', icon: CalendarIcon },
+                    { name: 'Books', href: '/super-admin/books', icon: BookOpenIcon },
+                    { name: 'Attendance', href: '/super-admin/attendance', icon: ClipboardDocumentListIcon },
                 ],
             },
             {
                 label: 'Management',
                 items: [
-                    { name: 'Payouts', href: '/payouts', icon: CurrencyDollarIcon },
-                    { name: 'Reports', href: '/reports', icon: ChartBarIcon },
-                    { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
+                    { name: 'Payouts', href: '/super-admin/payouts', icon: CurrencyDollarIcon },
+                    { name: 'Reports', href: '/super-admin/reports', icon: ChartBarIcon },
+                    { name: 'Settings', href: '/super-admin/settings', icon: Cog6ToothIcon },
                 ],
             },
         ];
     }
 
-    return [{ items: baseItems }];
+    // Fallback
+    return [{ items: [{ name: 'Dashboard', href: '/dashboard', icon: HomeIcon }] }];
 });
 </script>
 
