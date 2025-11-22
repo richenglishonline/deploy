@@ -2,13 +2,11 @@
 /**
  * Copy build files from public/build to root build directory
  * Maintains the same directory structure
- * Also commits changes with date/time in commit message
  */
 
 import { cpSync, existsSync, rmSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -37,37 +35,6 @@ try {
     cpSync(sourceDir, targetDir, { recursive: true });
 
     console.log('✅ Build files copied successfully!');
-
-    // Commit changes with date/time in commit message
-    try {
-        // Format date/time as MM/DD/YYYY HH:MM
-        const now = new Date();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const year = now.getFullYear();
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const dateTime = `${month}/${day}/${year} ${hours}:${minutes}`;
-        const commitMessage = `Fix (${dateTime})`;
-
-        console.log('📝 Staging changes for commit...');
-        execSync('git add -A', { cwd: rootDir, stdio: 'inherit' });
-
-        console.log(`💾 Committing with message: "${commitMessage}"`);
-        execSync(`git commit -m "${commitMessage}"`, { cwd: rootDir, stdio: 'inherit' });
-
-        console.log('✅ Changes committed successfully!');
-
-        // Push changes to remote repository
-        console.log('🚀 Pushing changes to origin main...');
-        execSync('git push origin main', { cwd: rootDir, stdio: 'inherit' });
-
-        console.log('✅ Changes pushed successfully!');
-    } catch (gitError) {
-        // Don't fail the build if git commands fail (e.g., no changes, not a git repo)
-        console.warn('⚠️  Git operation skipped:', gitError.message);
-        console.log('   (This is normal if there are no changes or not in a git repository)');
-    }
 } catch (error) {
     console.error('❌ Error copying build files:', error.message);
     process.exit(1);
