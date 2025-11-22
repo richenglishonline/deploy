@@ -60,21 +60,19 @@
         --chart-4: 280 65% 60%;
         --chart-5: 340 75% 55%;
     }
-}
 
-@layer base {
     * {
         @apply border-border;
-    }
-    
-    body {
-        @apply antialiased bg-background text-foreground;
-        font-family: 'Inter', system-ui, -apple-system, sans-serif;
     }
     
     /* Smooth scrolling */
     html {
         scroll-behavior: smooth;
+    }
+    
+    body {
+        @apply antialiased bg-background text-foreground;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
     }
     
     /* Focus styles */
