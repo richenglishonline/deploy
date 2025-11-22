@@ -106,9 +106,17 @@ try {
  */
 async function generateAICommitMessage(diff, files) {
     try {
+        // Try Google Gemini API first (preferred - faster and better quality)
+        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+        if (GEMINI_API_KEY) {
+            return await generateWithGemini(diff, files, GEMINI_API_KEY);
+        }
+
+        // Fallback to Hugging Face API
         const HF_API_KEY = process.env.HUGGINGFACE_API_KEY;
         if (!HF_API_KEY) {
-            console.log('⚠️  HUGGINGFACE_API_KEY not set, skipping AI commit message');
+            console.log('⚠️  GEMINI_API_KEY or HUGGINGFACE_API_KEY not set, skipping AI commit message');
+            console.log('   Set GEMINI_API_KEY for best results (free tier available)');
             return null;
         }
 
@@ -279,6 +287,134 @@ Do not include any explanation or additional text, only the commit message. [/IN
             console.warn('⚠️  All AI models failed. Using timestamp fallback.');
         } else {
             console.warn(`⚠️  AI generation error: ${error.message}`);
+        }
+        return null;
+    }
+}
+
+/**
+ * Generate commit message using Google Gemini API
+ * @param {string} diff - Git diff statistics
+ * @param {string} files - Changed file names
+ * @param {string} apiKey - Gemini API key
+ * @returns {Promise<string|null>} - Generated commit message or null if failed
+ */
+async function generateWithGemini(diff, files, apiKey) {
+    try {
+        // Truncate diff if too long (Gemini has token limits, but generous)
+        const maxDiffLength = 2000;
+        const truncatedDiff = diff.length > maxDiffLength 
+            ? diff.substring(0, maxDiffLength) + '... (truncated)'
+            : diff;
+
+        // Create prompt optimized for Gemini
+        const prompt = `Analyze these git changes and generate a concise commit message following conventional commit format (<type>(<scope>): <subject>).
+
+Changed files:
+${files}
+
+Changes:
+${truncatedDiff}
+
+Generate ONLY the commit message following this format: <type>(<scope>): <subject>
+Do not include any explanation, reasoning, or additional text. Only output the commit message itself.
+
+Examples:
+- feat(dashboard): Add user analytics chart
+- fix(sidebar): Resolve navigation routing issues
+- refactor(api): Optimize database queries
+- chore(deps): Update dependencies
+
+Now generate the commit message for the changes above:`;
+
+        console.log('🤖 Generating commit message with Google Gemini AI...');
+        console.log('   Model: gemini-2.0-flash');
+
+        // Call Gemini API (using gemini-2.0-flash model)
+        const response = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            {
+                contents: [{
+                    parts: [{
+                        text: prompt
+                    }]
+                }],
+                generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 100,
+                    topP: 0.8,
+                    topK: 40
+                }
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                timeout: 30000 // 30 second timeout
+            }
+        );
+
+        // Extract generated text from response
+        let generatedText = '';
+        if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+            generatedText = response.data.candidates[0].content.parts[0].text.trim();
+        }
+
+        if (!generatedText) {
+            console.warn('⚠️  No response from Gemini API');
+            return null;
+        }
+
+        // Clean up the response - extract just the commit message
+        let commitMessage = generatedText.trim();
+        
+        // Remove quotes if wrapped in quotes
+        commitMessage = commitMessage.replace(/^["']|["']$/g, '');
+
+        // Extract the first line (commit message should be one line)
+        commitMessage = commitMessage.split('\n')[0].trim();
+
+        // Remove markdown code blocks if present
+        commitMessage = commitMessage.replace(/^```[\w]*\n?|\n?```$/g, '').trim();
+
+        // Remove "Commit message:" or similar prefixes
+        commitMessage = commitMessage.replace(/^(commit message|message|commit):\s*/i, '').trim();
+
+        // Validate the message is not empty
+        if (!commitMessage || commitMessage.length < 3) {
+            console.warn('⚠️  Generated commit message is too short or empty');
+            return null;
+        }
+
+        // Validate it follows conventional commit format (basic check)
+        if (!commitMessage.match(/^(feat|fix|chore|refactor|style|test|docs|perf|ci|build|revert)(\(.+\))?:/)) {
+            // If it doesn't match, try to fix common issues
+            if (commitMessage.match(/^[a-z]/)) {
+                // Starts with lowercase, might just need format
+                commitMessage = `feat: ${commitMessage}`;
+            }
+        }
+
+        console.log(`✅ Gemini AI generated: "${commitMessage}"`);
+        return commitMessage;
+
+    } catch (error) {
+        // Handle various error cases
+        if (error.response) {
+            // API error
+            if (error.response.status === 400) {
+                console.warn('⚠️  Invalid request to Gemini API (check API key and prompt)');
+            } else if (error.response.status === 403) {
+                console.warn('⚠️  Gemini API access denied (check API key and permissions)');
+            } else if (error.response.status === 429) {
+                console.warn('⚠️  Gemini API rate limit exceeded, please try again later');
+            } else {
+                console.warn(`⚠️  Gemini API error: ${error.response.status} - ${error.response.statusText}`);
+            }
+        } else if (error.code === 'ECONNABORTED') {
+            console.warn('⚠️  Request timeout (Gemini API may be slow)');
+        } else {
+            console.warn(`⚠️  Gemini generation error: ${error.message}`);
         }
         return null;
     }
