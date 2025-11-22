@@ -132,14 +132,34 @@ Do not include any explanation or additional text, only the commit message. [/IN
 
         // Use Hugging Face Inference API
         // Try models in order (first available will be used)
-        // Using models that are available for inference on Hugging Face
+        // Using models from Hugging Face that are available for inference
         const FALLBACK_MODELS = [
             process.env.HF_MODEL, // User-specified model first
-            'mistralai/Mistral-7B-Instruct-v0.1', // Instruction-tuned model (good for commit messages)
-            'meta-llama/Llama-3.1-8B-Instruct', // Meta's instruction-tuned model
+            // Popular and well-performing models (from Hugging Face trending page)
+            'meta-llama/Llama-3.1-8B-Instruct', // 5.21M downloads, 4.98k likes - Best for instructions
+            'openai/gpt-oss-20b', // 6M downloads, 3.97k likes
+            'openai/gpt-oss-120b', // 4.36M downloads, 4.18k likes
+            'moonshotai/Kimi-K2-Thinking', // 218k downloads, 1.35k likes
+            'MiniMaxAI/MiniMax-M2', // 936k downloads, 1.34k likes
+            'zai-org/GLM-4.6', // 84.6k downloads, 1.08k likes
+            'deepseek-ai/DeepSeek-V3.2-Exp', // 75.8k downloads, 819 likes
+            'miromind-ai/MiroThinker-v1.0-72B', // 2.23k downloads, 112 likes
+            'allenai/Olmo-3-1125-32B', // 4.05k downloads, 52 likes
+            'WeiboAI/VibeThinker-1.5B', // 14k downloads, 434 likes
+            'miromind-ai/MiroThinker-v1.0-8B', // 1.3k downloads, 47 likes
+            'allenai/Olmo-3-7B-Instruct', // 2.25k downloads, 37 likes
+            'ai-sage/GigaChat3-10B-A1.8B', // 1.81k downloads, 34 likes
+            'MaziyarPanahi/VibeThinker-1.5B-GGUF', // 8.55k downloads, 30 likes
+            'allenai/Olmo-3-7B-Think', // 4.06k downloads, 29 likes
+            'salakash/SamKash-Tolstoy', // 3.05k downloads, 282 likes
+            'PleIAs/Baguettotron', // 6.77k downloads, 188 likes
+            'cerebras/MiniMax-M2-REAP-162B-A10B', // 3.73k downloads, 68 likes
+            'p-e-w/gpt-oss-20b-heretic', // 1.89k downloads, 46 likes
+            'ai-sage/GigaChat3-702B-A36B-preview', // 280 downloads, 63 likes
+            // Fallback models (smaller/faster)
             'google/flan-t5-base', // Instruction following (smaller, faster)
-            'microsoft/DialoGPT-medium', // Conversational model (free, works well)
-            'distilgpt2' // Smaller GPT-2 variant (fallback)
+            'microsoft/DialoGPT-medium', // Conversational model
+            'distilgpt2' // Smaller GPT-2 variant
         ].filter(Boolean); // Remove undefined values
 
         // Try each model until one works
