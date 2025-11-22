@@ -7,9 +7,9 @@
         <title inertia>{{ config('app.name', 'Rich English') }}</title>
 
         <!-- Favicon -->
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
-        <link rel="alternate icon" type="image/x-icon" href="/favicon.ico?v=2">
-        <link rel="apple-touch-icon" href="/favicon.ico?v=2">
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3">
+        <link rel="alternate icon" type="image/x-icon" href="/favicon.ico?v=3">
+        <link rel="apple-touch-icon" href="/favicon.ico?v=3">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
