@@ -5,8 +5,10 @@
  * Also commits changes with AI-generated commit message using Hugging Face (or timestamp fallback)
  */
 
+// Load environment variables from .env file
+import { config } from 'dotenv';
 import { cpSync, existsSync, rmSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import axios from 'axios';
@@ -14,6 +16,9 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
+
+// Load .env file from project root
+config({ path: resolve(rootDir, '.env') });
 
 const sourceDir = join(rootDir, 'public', 'build');
 const targetDir = join(rootDir, 'build');
