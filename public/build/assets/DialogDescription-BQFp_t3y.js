@@ -1,1 +1,0 @@
-import{d as t,I as e}from"./DialogFooter-qDcU_0lk.js";import{p as r,w as o,E as l,s as n,u as a,f as c}from"./app-0fzbWLMr.js";const m={__name:"DialogDescription",props:{class:{type:String,default:""}},setup(p){return(s,u)=>(c(),r(a(e),{class:n(a(t)("text-sm text-muted-foreground",s.$attrs.class))},{default:o(()=>[l(s.$slots,"default")]),_:3},8,["class"]))}};export{m as _};
