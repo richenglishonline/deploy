@@ -131,32 +131,70 @@ Generate only the commit message following this format: <type>(<scope>): <subjec
 Do not include any explanation or additional text, only the commit message:`;
 
         // Use Hugging Face Inference API
-        // Recommended models: 'meta-llama/Llama-2-7b-chat-hf', 'bigcode/starcoder', 'gpt2'
-        const MODEL = process.env.HF_MODEL || 'gpt2';
-        const HF_API_URL = `https://api-inference.huggingface.co/models/${MODEL}`;
+        // Try models in order (first available will be used)
+        const FALLBACK_MODELS = [
+            process.env.HF_MODEL, // User-specified model first
+            'microsoft/DialoGPT-medium', // Conversational model (free, works well)
+            'google/flan-t5-base', // Instruction following (smaller, faster)
+            'distilgpt2' // Smaller GPT-2 variant
+        ].filter(Boolean); // Remove undefined values
 
-        console.log('🤖 Generating commit message with Hugging Face AI...');
-        console.log(`   Model: ${MODEL}`);
+        // Try each model until one works
+        let response = null;
+        let usedModel = null;
+        let lastError = null;
 
-        // Call HF API with timeout
-        const response = await axios.post(
-            HF_API_URL,
-            {
-                inputs: prompt,
-                parameters: {
-                    max_new_tokens: 100,
-                    temperature: 0.7,
-                    return_full_text: false
+        for (const MODEL of FALLBACK_MODELS) {
+            const HF_API_URL = `https://api-inference.huggingface.co/models/${MODEL}`;
+            
+            try {
+                console.log('🤖 Generating commit message with Hugging Face AI...');
+                console.log(`   Trying model: ${MODEL}`);
+
+                // Call HF API with timeout
+                response = await axios.post(
+                    HF_API_URL,
+                    {
+                        inputs: prompt,
+                        parameters: {
+                            max_new_tokens: 100,
+                            temperature: 0.7,
+                            return_full_text: false
+                        }
+                    },
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${HF_API_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 30000 // 30 second timeout
+                    }
+                );
+                
+                usedModel = MODEL;
+                console.log(`   ✅ Successfully using model: ${MODEL}`);
+                break; // Success, exit loop
+                
+            } catch (error) {
+                lastError = error;
+                if (error.response) {
+                    // If 410 (Gone) or 404 (Not Found), try next model
+                    if (error.response.status === 410 || error.response.status === 404) {
+                        console.log(`   ⚠️  Model ${MODEL} not available, trying next...`);
+                        continue; // Try next model
+                    }
+                    // Other errors, break and handle
+                    break;
                 }
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${HF_API_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 30000 // 30 second timeout
+                // Network/timeout errors, try next model
+                console.log(`   ⚠️  Error with model ${MODEL}, trying next...`);
             }
-        );
+        }
+
+        // If all models failed, throw error
+        if (!response || !usedModel) {
+            throw lastError || new Error('All models failed');
+        }
 
         // Extract generated text from response
         let generatedText = '';
@@ -203,11 +241,19 @@ Do not include any explanation or additional text, only the commit message:`;
                 console.warn('⚠️  Model is loading, please wait a moment and try again');
             } else if (error.response.status === 429) {
                 console.warn('⚠️  Rate limit exceeded, please try again later');
+            } else if (error.response.status === 410) {
+                console.warn('⚠️  Model endpoint no longer available (410 Gone)');
+                console.warn('   Tried all fallback models. Set HF_MODEL in .env to use a specific model.');
+            } else if (error.response.status === 404) {
+                console.warn('⚠️  Model not found (404 Not Found)');
+                console.warn('   Please check HF_MODEL in .env or let it use default models');
             } else {
                 console.warn(`⚠️  API error: ${error.response.status} - ${error.response.statusText}`);
             }
         } else if (error.code === 'ECONNABORTED') {
             console.warn('⚠️  Request timeout (model may be loading)');
+        } else if (error.message === 'All models failed') {
+            console.warn('⚠️  All AI models failed. Using timestamp fallback.');
         } else {
             console.warn(`⚠️  AI generation error: ${error.message}`);
         }
