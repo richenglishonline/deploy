@@ -32,7 +32,7 @@ const handleDelete = async () => {
     try {
         loading.value = true;
         await api.delete(`/teacher/${props.userId}`);
-        router.visit(route('admins.index'));
+        router.visit('/super-admin/admins');
     } catch (error) {
         console.error('Error deleting admin:', error);
         deleteDialogOpen.value = false;
