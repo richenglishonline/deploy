@@ -1,320 +1,366 @@
 <script setup>
-import { reactive, ref, computed } from "vue";
-import { Head, usePage, router } from "@inertiajs/vue3";
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
-import Button from "@/Components/ui/Button.vue";
-import Dialog from "@/Components/ui/Dialog.vue";
-import DialogHeader from "@/Components/ui/DialogHeader.vue";
-import DialogTitle from "@/Components/ui/DialogTitle.vue";
-import DialogDescription from "@/Components/ui/DialogDescription.vue";
-import DialogFooter from "@/Components/ui/DialogFooter.vue";
-import { BanknotesIcon, ChartBarIcon } from "@heroicons/vue/24/outline";
-import { usePayouts } from "@/lib/tanstack/payouts";
+import { ref, onMounted, computed } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AdvancedTable from '@/Components/ui/AdvancedTable.vue';
+import Button from '@/Components/ui/Button.vue';
+import Badge from '@/Components/ui/Badge.vue';
+import Card from '@/Components/ui/Card.vue';
+import {
+    PlusIcon,
+    PencilIcon,
+    TrashIcon,
+    EyeIcon,
+    UserGroupIcon,
+    AcademicCapIcon,
+    BookOpenIcon,
+    CalendarIcon,
+} from '@heroicons/vue/24/outline';
+import api from '@/lib/api';
 
 const page = usePage();
+const loading = ref(false);
+const students = ref([]);
+const stats = ref(null);
 
-const filters = reactive({
-    status: "",
-    start_date: "",
-    end_date: "",
-    page: 1,
-    limit: 20,
-});
+const columns = [
+    {
+        key: 'name',
+        label: 'Student',
+        sortable: true,
+    },
+    {
+        key: 'email',
+        label: 'Email',
+        sortable: true,
+    },
+    {
+        key: 'country',
+        label: 'Country',
+        sortable: true,
+    },
+    {
+        key: 'timezone',
+        label: 'Timezone',
+        sortable: true,
+    },
+    {
+        key: 'teacher_count',
+        label: 'Teachers',
+        sortable: true,
+        align: 'center',
+    },
+    {
+        key: 'classes_count',
+        label: 'Classes',
+        sortable: true,
+        align: 'center',
+    },
+    {
+        key: 'status',
+        label: 'Status',
+        sortable: true,
+        align: 'center',
+    },
+    {
+        key: 'created_at',
+        label: 'Joined',
+        sortable: true,
+        format: 'date',
+    },
+];
 
-const { data: payoutsData, isFetching: loading, refetch } = usePayouts(filters);
+const filters = [
+    {
+        key: 'country',
+        label: 'Country',
+        type: 'select',
+        options: [
+            { value: '', label: 'All Countries' },
+            { value: 'Philippines', label: 'Philippines' },
+            { value: 'USA', label: 'USA' },
+            { value: 'India', label: 'India' },
+            { value: 'China', label: 'China' },
+        ],
+    },
+    {
+        key: 'status',
+        label: 'Status',
+        type: 'select',
+        options: [
+            { value: '', label: 'All Statuses' },
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+            { value: 'pending', label: 'Pending' },
+        ],
+    },
+];
 
-const payouts = computed(() => payoutsData?.value?.payouts ?? []);
-const pagination = computed(() => payoutsData?.value?.pagination ?? null);
-
-const summary = computed(() => {
-    if (!payouts.value.length) {
-        return {
-            total_payouts: 0,
-            total_amount: 0,
-            total_duration: 0,
-            total_classes: 0,
-            total_incentives: 0,
-            pending: 0,
-            processing: 0,
-            completed: 0,
-        };
+const fetchStudents = async () => {
+    loading.value = true;
+    try {
+        const { data } = await api.get('/students');
+        students.value = Array.isArray(data) ? data.map(student => ({
+            ...student,
+            name: `${student.first_name || ''} ${student.last_name || ''}`.trim() || student.email || 'Unnamed Student',
+            teacher_count: student.teachers?.length || 0,
+            classes_count: student.classes?.length || 0,
+            status: student.status || (student.active !== false ? 'active' : 'inactive'),
+        })) : [];
+    } catch (error) {
+        console.error('Error fetching students:', error);
+        students.value = [];
+    } finally {
+        loading.value = false;
     }
-
-    const totalAmount = payouts.value.reduce(
-        (sum, p) => sum + (parseFloat(p.amount) || 0),
-        0
-    );
-    const totalDuration = payouts.value.reduce(
-        (sum, p) => sum + (parseInt(p.duration) || 0),
-        0
-    );
-    const totalClasses = payouts.value.reduce(
-        (sum, p) => sum + (parseInt(p.total_class) || 0),
-        0
-    );
-    const totalIncentives = payouts.value.reduce(
-        (sum, p) => sum + (parseFloat(p.incentives) || 0),
-        0
-    );
-
-    return {
-        total_payouts: payouts.value.length,
-        total_amount: totalAmount,
-        total_duration: totalDuration,
-        total_classes: totalClasses,
-        total_incentives: totalIncentives,
-        pending: payouts.value.filter((p) => p.status === "pending").length,
-        processing: payouts.value.filter((p) => p.status === "processing")
-            .length,
-        completed: payouts.value.filter((p) => p.status === "completed").length,
-    };
-});
-
-// Pagination
-const goToPage = (pageNum) => {
-    if (!pagination.value) return;
-    if (pageNum < 1 || pageNum > pagination.value.totalPages) return;
-    filters.page = pageNum;
-    refetch();
 };
 
-const resetFilters = () => {
-    filters.status = "";
-    filters.start_date = "";
-    filters.end_date = "";
-    filters.page = 1;
-    refetch();
-};
-
-// Formatting helpers
-const formatDate = (dateString) => {
-    if (!dateString) return "—";
-    return new Date(dateString).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
-
-const formatCurrency = (amount) => {
-    if (!amount) return "$0.00";
-    return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-    }).format(amount);
-};
-
-// Admin Dialog
-const dialogOpen = ref(false);
-const editingPayout = ref(null);
-const form = reactive({
-    teacher_name: "",
-    amount: "",
-    duration: "",
-    total_class: "",
-    incentives: "",
-    status: "pending",
-});
-
-const openDialog = (payout = null) => {
-    editingPayout.value = payout;
-    if (payout) {
-        form.teacher_name = payout.teacher_name;
-        form.amount = payout.amount;
-        form.duration = payout.duration;
-        form.total_class = payout.total_class;
-        form.incentives = payout.incentives;
-        form.status = payout.status;
-    } else {
-        form.teacher_name = "";
-        form.amount = "";
-        form.duration = "";
-        form.total_class = "";
-        form.incentives = "";
-        form.status = "pending";
+const fetchStats = async () => {
+    try {
+        const { data } = await api.get('/dashboard/stats');
+        stats.value = data?.stats || {};
+    } catch (error) {
+        console.error('Error fetching stats:', error);
     }
-    dialogOpen.value = true;
 };
 
-const savePayout = () => {
-    // For now just close dialog (replace with API call)
-    dialogOpen.value = false;
-    refetch();
+const handleView = (row) => {
+    router.visit(`/super-admin/students/${row.id}`);
 };
+
+const handleEdit = (row) => {
+    router.visit(`/super-admin/students/${row.id}?edit=true`);
+};
+
+const handleDelete = async (student) => {
+    if (!confirm(`Are you sure you want to delete ${student.name}? This action cannot be undone.`)) return;
+    
+    try {
+        await api.delete(`/students/${student.id}`);
+        await fetchStudents();
+        await fetchStats();
+    } catch (error) {
+        console.error('Error deleting student:', error);
+        alert('Failed to delete student');
+    }
+};
+
+const handleBulkDelete = async () => {
+    if (!confirm(`Are you sure you want to delete ${selectedRows.value.length} student(s)? This action cannot be undone.`)) return;
+    
+    try {
+        await Promise.all(selectedRows.value.map(student => api.delete(`/students/${student.id}`)));
+        selectedRows.value = [];
+        await fetchStudents();
+        await fetchStats();
+    } catch (error) {
+        console.error('Error bulk deleting students:', error);
+        alert('Failed to delete some students');
+    }
+};
+
+const handleCreate = () => {
+    router.visit('/super-admin/students/create');
+};
+
+const handleExport = (data) => {
+    const headers = columns.map(c => c.label).join(',');
+    const rows = data.map(row => 
+        columns.map(col => `"${row[col.key] || ''}"`).join(',')
+    ).join('\n');
+    const csv = `${headers}\n${rows}`;
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `students-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+};
+
+onMounted(() => {
+    fetchStudents();
+    fetchStats();
+});
 </script>
 
 <template>
-    <Head title="Admin Payouts Management" />
+    <Head title="Students Management" />
 
     <AuthenticatedLayout>
-        <template #header>
+        <div class="space-y-6 pb-8">
+            <!-- Page Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h2
-                        class="text-xl font-semibold leading-tight text-gray-800"
-                    >
-                        Admin Payouts Management
-                    </h2>
-                    <p class="text-sm text-gray-500">
-                        Add, edit, and manage payouts.
+                    <h1 class="text-3xl font-bold text-gray-900">Students Management</h1>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Manage all students in the platform
                     </p>
                 </div>
-                <div class="flex gap-2">
-                    <Button @click="refetch" :disabled="loading"
-                        >Refresh</Button
-                    >
-                    <Button @click="openDialog()">Add Payout</Button>
-                </div>
-            </div>
-        </template>
-
-        <!-- Summary & Filters (same as before) -->
-        <div class="py-10">
-            <!-- ...Summary Cards & Filters Table code... keep as in your previous template -->
-
-            <!-- Payouts Table -->
-            <div
-                class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
-            >
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr
-                                class="text-left text-xs font-semibold uppercase tracking-wider text-gray-500"
-                            >
-                                <th class="px-6 py-3">Period</th>
-                                <th class="px-6 py-3">Duration</th>
-                                <th class="px-6 py-3">Classes</th>
-                                <th class="px-6 py-3">Amount</th>
-                                <th class="px-6 py-3">Incentives</th>
-                                <th class="px-6 py-3">Status</th>
-                                <th class="px-6 py-3">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200 bg-white">
-                            <tr v-if="!loading && payouts.length === 0">
-                                <td
-                                    colspan="7"
-                                    class="px-6 py-4 text-center text-sm text-gray-500"
-                                >
-                                    No payouts found.
-                                </td>
-                            </tr>
-                            <tr
-                                v-for="payout in payouts"
-                                :key="payout.id"
-                                class="text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                                <td class="px-6 py-4">
-                                    {{ formatDate(payout.start_date) }} -
-                                    {{ formatDate(payout.end_date) }}
-                                </td>
-                                <td class="px-6 py-4">
-                                    {{ payout.duration ?? "—" }} hours
-                                </td>
-                                <td class="px-6 py-4">
-                                    {{ payout.total_class ?? "—" }}
-                                </td>
-                                <td
-                                    class="px-6 py-4 font-semibold text-gray-900"
-                                >
-                                    {{ formatCurrency(payout.amount) }}
-                                </td>
-                                <td class="px-6 py-4">
-                                    {{ formatCurrency(payout.incentives) }}
-                                </td>
-                                <td class="px-6 py-4">
-                                    <span
-                                        :class="[
-                                            'px-2 py-1 text-xs font-medium rounded',
-                                            payout.status === 'completed'
-                                                ? 'bg-green-100 text-green-800'
-                                                : payout.status === 'processing'
-                                                ? 'bg-yellow-100 text-yellow-800'
-                                                : 'bg-gray-100 text-gray-800',
-                                        ]"
-                                    >
-                                        {{ payout.status }}
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4">
-                                    <Button
-                                        @click="openDialog(payout)"
-                                        variant="outline"
-                                        size="sm"
-                                        >Edit</Button
-                                    >
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <Button @click="handleCreate" variant="primary">
+                    <PlusIcon class="h-5 w-5 mr-2" />
+                    Add Student
+                </Button>
             </div>
 
-            <!-- Admin Dialog -->
-            <Dialog :open="dialogOpen" @update:open="dialogOpen = $event">
-                <div class="sm:max-w-[600px] max-h-[90vh] overflow-y-auto p-6">
-                    <DialogHeader>
-                        <DialogTitle>{{
-                            editingPayout ? "Update Payout" : "Add Payout"
-                        }}</DialogTitle>
-                        <DialogDescription>
-                            {{
-                                editingPayout
-                                    ? "Update payout details"
-                                    : "Add a new payout"
-                            }}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div class="mt-4 grid grid-cols-1 gap-4">
-                        <input
-                            v-model="form.teacher_name"
-                            placeholder="Teacher Name"
-                            class="w-full rounded border px-3 py-2"
-                        />
-                        <input
-                            v-model="form.amount"
-                            placeholder="Amount"
-                            type="number"
-                            class="w-full rounded border px-3 py-2"
-                        />
-                        <input
-                            v-model="form.duration"
-                            placeholder="Duration"
-                            type="number"
-                            class="w-full rounded border px-3 py-2"
-                        />
-                        <input
-                            v-model="form.total_class"
-                            placeholder="Total Classes"
-                            type="number"
-                            class="w-full rounded border px-3 py-2"
-                        />
-                        <input
-                            v-model="form.incentives"
-                            placeholder="Incentives"
-                            type="number"
-                            class="w-full rounded border px-3 py-2"
-                        />
-                        <select
-                            v-model="form.status"
-                            class="w-full rounded border px-3 py-2"
-                        >
-                            <option value="pending">Pending</option>
-                            <option value="processing">Processing</option>
-                            <option value="completed">Completed</option>
-                        </select>
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Total Students</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ stats?.totalStudents || students.length }}
+                            </p>
+                            <p class="mt-1 text-xs text-green-600">+12% from last month</p>
+                        </div>
+                        <div class="rounded-lg bg-blue-50 p-3">
+                            <UserGroupIcon class="h-8 w-8 text-blue-600" />
+                        </div>
                     </div>
-                    <DialogFooter class="mt-4 flex justify-end gap-2">
-                        <Button @click="dialogOpen = false" variant="outline"
-                            >Cancel</Button
-                        >
-                        <Button @click="savePayout">{{
-                            editingPayout ? "Update" : "Save"
-                        }}</Button>
-                    </DialogFooter>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Active Students</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ students.filter(s => s.status === 'active').length }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Currently enrolled</p>
+                        </div>
+                        <div class="rounded-lg bg-green-50 p-3">
+                            <UserGroupIcon class="h-8 w-8 text-green-600" />
+                        </div>
+                    </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Total Classes</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ stats?.totalClasses || students.reduce((sum, s) => sum + (s.classes_count || 0), 0) }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Scheduled classes</p>
+                        </div>
+                        <div class="rounded-lg bg-purple-50 p-3">
+                            <CalendarIcon class="h-8 w-8 text-purple-600" />
+                        </div>
+                    </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Avg Teachers/Student</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ students.length > 0 
+                                    ? (students.reduce((sum, s) => sum + (s.teacher_count || 0), 0) / students.length).toFixed(1)
+                                    : '0'
+                                }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Per student</p>
+                        </div>
+                        <div class="rounded-lg bg-indigo-50 p-3">
+                            <AcademicCapIcon class="h-8 w-8 text-indigo-600" />
+                        </div>
+                    </div>
+                </Card>
+            </div>
+
+            <!-- Students Table -->
+            <AdvancedTable
+                v-if="!loading"
+                title="All Students"
+                :columns="columns"
+                :data="students"
+                :searchable="true"
+                :paginated="true"
+                :selectable="true"
+                :exportable="true"
+                :filters="filters"
+                :items-per-page="25"
+                row-key="id"
+                @export="handleExport"
+                @bulk-delete="handleBulkDelete"
+            >
+                <template #cell-name="{ row }">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-teal-600">
+                            <span class="text-sm font-semibold text-white">
+                                {{ row.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) }}
+                                    </span>
+                        </div>
+                        <div>
+                            <div class="font-medium text-gray-900">{{ row.name }}</div>
+                            <div v-if="row.timezone" class="text-xs text-gray-500">{{ row.timezone }}</div>
                 </div>
-            </Dialog>
+            </div>
+                </template>
+
+                <template #cell-email="{ row }">
+                    <div class="text-gray-900">{{ row.email || '—' }}</div>
+                </template>
+
+                <template #cell-country="{ row }">
+                    <div class="text-gray-900">{{ row.country || '—' }}</div>
+                </template>
+
+                <template #cell-teacher_count="{ row }">
+                    <Badge variant="secondary">
+                        <AcademicCapIcon class="h-3 w-3 mr-1 inline" />
+                        {{ row.teacher_count || 0 }}
+                    </Badge>
+                </template>
+
+                <template #cell-classes_count="{ row }">
+                    <Badge variant="secondary">
+                        <BookOpenIcon class="h-3 w-3 mr-1 inline" />
+                        {{ row.classes_count || 0 }}
+                    </Badge>
+                </template>
+
+                <template #cell-status="{ row }">
+                    <Badge 
+                        :variant="row.status === 'active' ? 'success' : row.status === 'pending' ? 'warning' : 'secondary'"
+                    >
+                        {{ row.status || 'active' }}
+                    </Badge>
+                </template>
+
+                <template #row-actions="{ row }">
+                    <div class="flex items-center justify-end gap-2">
+                        <button
+                            @click="handleView(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                            title="View Details"
+                        >
+                            <EyeIcon class="h-5 w-5" />
+                        </button>
+                        <button
+                            @click="handleEdit(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                            title="Edit"
+                        >
+                            <PencilIcon class="h-5 w-5" />
+                        </button>
+                        <button
+                            @click="handleDelete(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-red-600 transition-colors"
+                            title="Delete"
+                        >
+                            <TrashIcon class="h-5 w-5" />
+                        </button>
+                    </div>
+                </template>
+            </AdvancedTable>
+
+            <!-- Loading State -->
+            <div v-else class="space-y-4">
+                <div class="h-64 rounded-xl bg-gray-200 animate-pulse"></div>
+                </div>
         </div>
     </AuthenticatedLayout>
 </template>

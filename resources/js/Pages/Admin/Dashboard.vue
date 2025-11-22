@@ -5,7 +5,8 @@ import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import DashboardHeader from "@/Components/DashboardHeader.vue";
 import KPICard from "@/Components/Dashboard/KPICard.vue";
 import ActivityTimeline from "@/Components/Dashboard/ActivityTimeline.vue";
-import DataTable from "@/Components/Dashboard/DataTable.vue";
+import AdvancedTable from "@/Components/ui/AdvancedTable.vue";
+import Card from "@/Components/ui/Card.vue";
 import LineChart from "@/Components/Charts/LineChart.vue";
 import BarChart from "@/Components/Charts/BarChart.vue";
 import PieChart from "@/Components/Charts/PieChart.vue";
@@ -18,7 +19,6 @@ import {
     BookOpenIcon,
     CurrencyDollarIcon,
     AcademicCapIcon,
-    BellIcon,
     ChartBarIcon,
     ArrowTrendingUpIcon,
     CheckCircleIcon,
@@ -32,7 +32,6 @@ const hasLoaded = ref(false);
 
 const role = computed(() => page.props.auth?.user?.role ?? "admin");
 
-// Generate sample chart data based on stats
 const generateChartData = (type) => {
     const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const colors = {
@@ -108,7 +107,6 @@ const generateChartData = (type) => {
     }
 };
 
-// Admin KPIs
 const adminKPIs = computed(() => {
     if (!stats.value || role.value !== "admin") return [];
 
@@ -118,9 +116,10 @@ const adminKPIs = computed(() => {
         {
             label: "Assigned Teachers",
             value: data.assignedTeachers ?? 0,
-            icon: UserGroupIcon,
+            icon: AcademicCapIcon,
             iconBgColor: "bg-blue-50",
             iconColor: "text-blue-600",
+            change: 5,
         },
         {
             label: "Students",
@@ -147,32 +146,32 @@ const adminKPIs = computed(() => {
             format: "currency",
         },
         {
-            label: "Books",
-            value: data.totalBooks ?? 0,
-            icon: BookOpenIcon,
-            iconBgColor: "bg-purple-50",
-            iconColor: "text-purple-600",
-        },
-        {
-            label: "Classes",
-            value: data.totalClasses ?? 0,
+            label: "Classes This Month",
+            value: data.totalClassesMonth ?? 0,
             icon: CalendarIcon,
             iconBgColor: "bg-pink-50",
             iconColor: "text-pink-600",
             change: 8,
         },
+        {
+            label: "Attendance Rate",
+            value: data.attendanceRate ?? 0,
+            icon: ClipboardDocumentListIcon,
+            iconBgColor: "bg-indigo-50",
+            iconColor: "text-indigo-600",
+            format: "percentage",
+            change: 2,
+        },
     ];
 });
 
-// Activity timeline data
 const activities = computed(() => {
     if (!stats.value) return [];
-
     const data = stats.value.dashboard ?? {};
     const recentClasses = data.activeClass?.slice(0, 5) ?? [];
 
-    return recentClasses.map((classItem, index) => ({
-        title: `Class with ${classItem.student || "Student"}`,
+    return recentClasses.map((classItem) => ({
+        title: `Class: ${classItem.student || "Student"}`,
         description: classItem.book || "No book assigned",
         time: `${classItem.start_time || "N/A"} - ${classItem.end_time || "N/A"}`,
         icon: CheckCircleIcon,
@@ -181,23 +180,30 @@ const activities = computed(() => {
     }));
 });
 
-// Table data
 const tableColumns = computed(() => [
-    { key: "student", label: "Student" },
-    { key: "book", label: "Book" },
-    { key: "start_time", label: "Time" },
-    { key: "type", label: "Type" },
+    { key: "teacher", label: "Teacher", sortable: true },
+    { key: "students", label: "Students", sortable: true },
+    { key: "classes", label: "Classes This Week", sortable: true },
+    { key: "attendance_rate", label: "Attendance Rate", sortable: true, format: "percentage" },
 ]);
 
 const tableData = computed(() => {
     if (!stats.value) return [];
-    const data = stats.value.dashboard ?? {};
-    return (data.activeClass ?? []).map((item) => ({
-        student: item.student || "N/A",
-        book: item.book || "N/A",
-        start_time: item.start_time || "N/A",
-        type: item.type || "N/A",
-    }));
+    // Mock data structure - replace with actual API data
+    return [
+        {
+            teacher: "John Doe",
+            students: 15,
+            classes: 12,
+            attendance_rate: 95,
+        },
+        {
+            teacher: "Jane Smith",
+            students: 18,
+            classes: 14,
+            attendance_rate: 92,
+        },
+    ];
 });
 
 const loadStats = async () => {
@@ -226,7 +232,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <Head title="Dashboard" />
+    <Head title="Admin Dashboard" />
 
     <AuthenticatedLayout>
         <div class="space-y-6 pb-8">
@@ -234,16 +240,12 @@ onMounted(() => {
 
             <!-- Loading State -->
             <div v-if="loading" class="space-y-6">
-                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                     <div
-                        v-for="i in 4"
+                        v-for="i in 6"
                         :key="i"
                         class="h-32 rounded-xl bg-gray-200 animate-pulse"
                     ></div>
-                </div>
-                <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                    <div class="h-96 rounded-xl bg-gray-200 animate-pulse"></div>
-                    <div class="h-96 rounded-xl bg-gray-200 animate-pulse"></div>
                 </div>
             </div>
 
@@ -268,43 +270,30 @@ onMounted(() => {
                 <!-- Charts Row -->
                 <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
                     <!-- Line Chart -->
-                    <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+                    <Card class="p-6">
                         <div class="mb-4 flex items-center justify-between">
                             <h3 class="text-lg font-semibold text-gray-900">
-                                Activity Trends
+                                Weekly Activity Trends
                             </h3>
                             <ChartBarIcon class="h-5 w-5 text-gray-400" />
                         </div>
                         <div class="h-64">
                             <LineChart :data="generateChartData('line')" />
                         </div>
-                    </div>
+                    </Card>
 
                     <!-- Pie Chart -->
-                    <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+                    <Card class="p-6">
                         <div class="mb-4 flex items-center justify-between">
                             <h3 class="text-lg font-semibold text-gray-900">
-                                Distribution
+                                Class Status Distribution
                             </h3>
-                            <BellIcon class="h-5 w-5 text-gray-400" />
+                            <ArrowTrendingUpIcon class="h-5 w-5 text-gray-400" />
                         </div>
                         <div class="h-64">
                             <PieChart :data="generateChartData('pie')" />
                         </div>
-                    </div>
-                </div>
-
-                <!-- Bar Chart Full Width -->
-                <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
-                    <div class="mb-4 flex items-center justify-between">
-                        <h3 class="text-lg font-semibold text-gray-900">
-                            Monthly Overview
-                        </h3>
-                        <ArrowTrendingUpIcon class="h-5 w-5 text-gray-400" />
-                    </div>
-                    <div class="h-80">
-                        <BarChart :data="generateChartData('bar')" />
-                    </div>
+                    </Card>
                 </div>
 
                 <!-- Bottom Row: Activity Timeline & Donut Chart -->
@@ -315,30 +304,53 @@ onMounted(() => {
                     </div>
 
                     <!-- Donut Chart -->
-                    <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+                    <Card class="p-6">
                         <div class="mb-4">
                             <h3 class="text-lg font-semibold text-gray-900">
-                                Status Overview
+                                Teacher Status
                             </h3>
                             <p class="mt-1 text-sm text-gray-500">
-                                Overview of system distribution
+                                Active vs Inactive
                             </p>
                         </div>
                         <div class="h-64">
                             <DonutChart :data="generateChartData('donut')" />
                         </div>
-                    </div>
+                    </Card>
                 </div>
 
-                <!-- Recent Classes Table -->
-                <DataTable
-                    title="Recent Classes"
+                <!-- Teacher Performance Table -->
+                <AdvancedTable
+                    title="Teacher Performance Overview"
                     :columns="tableColumns"
                     :data="tableData"
                     :searchable="true"
                     :paginated="true"
-                    :items-per-page="5"
-                />
+                    :items-per-page="10"
+                >
+                    <template #cell-teacher="{ row }">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
+                                <span class="text-sm font-semibold text-white">
+                                    {{ row.teacher.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) }}
+                                </span>
+                            </div>
+                            <span class="font-medium text-gray-900">{{ row.teacher }}</span>
+                        </div>
+                    </template>
+
+                    <template #cell-attendance_rate="{ row }">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-gray-900">{{ row.attendance_rate }}%</span>
+                            <div class="h-2 flex-1 max-w-[60px] rounded-full bg-gray-200">
+                                <div 
+                                    class="h-2 rounded-full bg-green-500"
+                                    :style="{ width: `${row.attendance_rate}%` }"
+                                ></div>
+                            </div>
+                        </div>
+                    </template>
+                </AdvancedTable>
             </template>
         </div>
     </AuthenticatedLayout>

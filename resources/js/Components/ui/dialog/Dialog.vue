@@ -1,18 +1,35 @@
 <script setup>
-import { DialogRoot, useForwardPropsEmits } from "reka-ui";
+import { computed } from 'vue';
+import { DialogRoot } from 'radix-vue';
 
 const props = defineProps({
-  open: { type: Boolean, required: false },
-  defaultOpen: { type: Boolean, required: false },
-  modal: { type: Boolean, required: false },
+  open: { 
+    type: Boolean, 
+    required: false,
+    default: false,
+  },
+  defaultOpen: { 
+    type: Boolean, 
+    required: false,
+    default: false,
+  },
+  modal: { 
+    type: Boolean, 
+    required: false,
+    default: true,
+  },
 });
+
 const emits = defineEmits(["update:open"]);
 
-const forwarded = useForwardPropsEmits(props, emits);
+const isOpen = computed({
+  get: () => props.open ?? props.defaultOpen,
+  set: (value) => emits("update:open", value),
+});
 </script>
 
 <template>
-  <DialogRoot v-bind="forwarded">
+  <DialogRoot v-model:open="isOpen" :modal="modal">
     <slot />
   </DialogRoot>
 </template>

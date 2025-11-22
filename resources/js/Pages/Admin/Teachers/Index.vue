@@ -1,658 +1,288 @@
 <script setup>
-import { reactive, ref, onMounted, computed } from 'vue';
-import { Head, usePage } from '@inertiajs/vue3';
+import { ref, onMounted, computed } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Dialog from '@/Components/ui/Dialog.vue';
-import DialogHeader from '@/Components/ui/DialogHeader.vue';
-import DialogFooter from '@/Components/ui/DialogFooter.vue';
-import DialogTitle from '@/Components/ui/DialogTitle.vue';
+import AdvancedTable from '@/Components/ui/AdvancedTable.vue';
 import Button from '@/Components/ui/Button.vue';
-import Input from '@/Components/ui/Input.vue';
-import Label from '@/Components/ui/Label.vue';
-import { PencilIcon, TrashIcon, PlusIcon } from '@heroicons/vue/24/outline';
+import Badge from '@/Components/ui/Badge.vue';
+import Card from '@/Components/ui/Card.vue';
+import {
+    EyeIcon,
+    PencilIcon,
+    AcademicCapIcon,
+    UserGroupIcon,
+    CalendarIcon,
+    CheckCircleIcon,
+    ClockIcon,
+} from '@heroicons/vue/24/outline';
 import api from '@/lib/api';
 
 const page = usePage();
-const filterRole = computed(() => page.props.filterRole ?? null);
-const isAdminsPage = computed(() => filterRole.value === 'admin');
-const isSuperAdmin = computed(() => page.props.auth?.user?.role === 'super-admin');
-
 const loading = ref(false);
-const rows = ref([]);
-const pagination = ref(null);
-const dialogOpen = ref(false);
-const editingUser = ref(null);
-const submitting = ref(false);
+const teachers = ref([]);
+const stats = ref(null);
 
-const formData = reactive({
-    first_name: '',
-    last_name: '',
-    email: '',
-    password: '',
-    country: '',
-    timezone: 'Asia/Manila',
-    role: filterRole.value || 'teacher',
-    accepted: isAdminsPage.value ? true : false,
-    // Teacher profile fields (optional)
-    phone: '',
-    degree: '',
-    major: '',
-    english_level: '',
-    availability: '',
-    has_webcam: false,
-    has_headset: false,
-    has_backup_internet: false,
-});
+const columns = [
+    {
+        key: 'name',
+        label: 'Teacher',
+        sortable: true,
+    },
+    {
+        key: 'email',
+        label: 'Email',
+        sortable: true,
+    },
+    {
+        key: 'country',
+        label: 'Country',
+        sortable: true,
+    },
+    {
+        key: 'students_count',
+        label: 'Assigned Students',
+        sortable: true,
+        align: 'center',
+    },
+    {
+        key: 'classes_count',
+        label: 'Classes This Month',
+        sortable: true,
+        align: 'center',
+    },
+    {
+        key: 'attendance_rate',
+        label: 'Attendance Rate',
+        sortable: true,
+        align: 'center',
+        format: 'percentage',
+    },
+    {
+        key: 'status',
+        label: 'Status',
+        sortable: true,
+        align: 'center',
+    },
+];
 
-const filters = reactive({
-    search: '',
-    country: '',
-    degree: '',
-    major: '',
-    accepted: '',
-    role: filterRole.value, // Add role filter
-    page: 1,
-    limit: 10,
-});
+const filters = [
+    {
+        key: 'country',
+        label: 'Country',
+        type: 'select',
+        options: [
+            { value: '', label: 'All Countries' },
+            { value: 'Philippines', label: 'Philippines' },
+            { value: 'USA', label: 'USA' },
+            { value: 'India', label: 'India' },
+        ],
+    },
+];
 
 const fetchTeachers = async () => {
     loading.value = true;
     try {
-        const params = { ...filters };
-        // Only include role if we're filtering for admins
-        if (!isAdminsPage.value) {
-            delete params.role;
-        }
-        const { data } = await api.get('/teacher', { params });
-        rows.value = data.teachers;
-        pagination.value = data.pagination;
+        const { data } = await api.get('/admin/teachers');
+        teachers.value = Array.isArray(data.teachers || data) ? (data.teachers || data).map(teacher => ({
+            ...teacher,
+            name: `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim() || teacher.email || 'Unnamed Teacher',
+            students_count: teacher.students?.length || 0,
+            classes_count: teacher.classes_this_month || 0,
+            attendance_rate: teacher.attendance_rate || 0,
+            status: teacher.accepted ? 'active' : 'pending',
+        })) : [];
     } catch (error) {
-        console.error(error);
+        console.error('Error fetching teachers:', error);
+        teachers.value = [];
     } finally {
         loading.value = false;
     }
 };
 
-const goToPage = (page) => {
-    if (!pagination.value) return;
-    if (page < 1 || page > pagination.value.totalPages) return;
-    filters.page = page;
-    fetchTeachers();
-};
-
-const resetFilters = () => {
-    filters.search = '';
-    filters.country = '';
-    filters.degree = '';
-    filters.major = '';
-    filters.accepted = '';
-    filters.page = 1;
-    if (isAdminsPage.value) {
-        filters.role = 'admin';
-    } else {
-        delete filters.role;
-    }
-    fetchTeachers();
-};
-
-const openAddDialog = () => {
-    editingUser.value = null;
-    Object.assign(formData, {
-        first_name: '',
-        last_name: '',
-        email: '',
-        password: '',
-        country: '',
-        timezone: 'Asia/Manila',
-        role: filterRole.value || 'teacher',
-        accepted: isAdminsPage.value ? true : false,
-        phone: '',
-        degree: '',
-        major: '',
-        english_level: '',
-        availability: '',
-        has_webcam: false,
-        has_headset: false,
-        has_backup_internet: false,
-    });
-    dialogOpen.value = true;
-};
-
-const openEditDialog = (user) => {
-    editingUser.value = user;
-    const nameParts = user.name.split(' ');
-    Object.assign(formData, {
-        first_name: nameParts[0] || '',
-        last_name: nameParts.slice(1).join(' ') || '',
-        email: user.email || '',
-        password: '', // Don't pre-fill password
-        country: user.country || '',
-        timezone: user.timezone || 'Asia/Manila',
-        role: user.role,
-        accepted: user.accepted ?? false,
-        phone: user.teacher_profile?.phone || '',
-        degree: user.teacher_profile?.degree || '',
-        major: user.teacher_profile?.major || '',
-        english_level: user.teacher_profile?.english_level || '',
-        availability: user.teacher_profile?.availability || '',
-        has_webcam: user.teacher_profile?.has_webcam || false,
-        has_headset: user.teacher_profile?.has_headset || false,
-        has_backup_internet: user.teacher_profile?.has_backup_internet || false,
-    });
-    dialogOpen.value = true;
-};
-
-const handleDelete = async (user) => {
-    if (!confirm(`Are you sure you want to delete ${user.name}? This action cannot be undone.`)) {
-        return;
-    }
-
+const fetchStats = async () => {
     try {
-        await api.delete(`/teacher/${user.id}`);
-        await fetchTeachers();
-        alert(`${isAdminsPage.value ? 'Admin' : 'Teacher'} deleted successfully`);
+        const { data } = await api.get('/dashboard/stats');
+        stats.value = data?.stats || {};
     } catch (error) {
-        console.error('Delete error:', error);
-        alert('Failed to delete. Please try again.');
+        console.error('Error fetching stats:', error);
     }
 };
 
-const handleSubmit = async () => {
-    submitting.value = true;
-    try {
-        const payload = { ...formData };
-        
-        // Remove password if empty (for updates)
-        if (editingUser.value && !payload.password) {
-            delete payload.password;
-        }
-
-        if (editingUser.value) {
-            // Update existing user
-            await api.patch(`/teacher/${editingUser.value.id}`, payload);
-            alert(`${isAdminsPage.value ? 'Admin' : 'Teacher'} updated successfully`);
-        } else {
-            // Create new user
-            await api.post('/teacher', payload);
-            alert(`${isAdminsPage.value ? 'Admin' : 'Teacher'} created successfully`);
-        }
-
-        dialogOpen.value = false;
-        await fetchTeachers();
-    } catch (error) {
-        console.error('Submit error:', error);
-        const message = error.response?.data?.message || error.message || 'Operation failed';
-        alert(message);
-    } finally {
-        submitting.value = false;
-    }
+const handleView = (row) => {
+    router.visit(`/admin/teachers/${row.id}`);
 };
 
-onMounted(fetchTeachers);
+const handleEdit = (row) => {
+    router.visit(`/admin/teachers/${row.id}/edit`);
+};
+
+onMounted(() => {
+    fetchTeachers();
+    fetchStats();
+});
 </script>
 
 <template>
-    <Head :title="isAdminsPage ? 'Admins' : 'Teachers'" />
-
+    <Head title="Assigned Teachers" />
+    
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex items-center justify-between">
-                <div>
-                    <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                        {{ isAdminsPage ? 'Admins' : 'Teachers' }}
-                    </h2>
-                    <p class="text-sm text-gray-500">
-                        {{ isAdminsPage ? 'Manage admin accounts and permissions.' : 'Review teacher applications, availability, and equipment readiness.' }}
-                    </p>
-                </div>
-                <div class="flex items-center gap-3">
-                    <button
-                        @click="openAddDialog"
-                        class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:pointer-events-none disabled:opacity-50"
-                    >
-                        <PlusIcon class="h-5 w-5" />
-                        Add {{ isAdminsPage ? 'Admin' : 'Teacher' }}
-                    </button>
-                    <Button
-                        @click="fetchTeachers"
-                        variant="outline"
-                        :disabled="loading"
-                    >
-                        Refresh
-                    </Button>
-                </div>
+        <div class="space-y-6 pb-8">
+            <!-- Page Header -->
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Assigned Teachers</h1>
+                <p class="mt-1 text-sm text-gray-500">
+                    View and manage teachers assigned to you
+                </p>
             </div>
-        </template>
 
-        <div class="py-10">
-            <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <form class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Search
-                            </label>
-                            <input
-                                v-model="filters.search"
-                                type="text"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                placeholder="Name or email"
-                            />
+                            <p class="text-sm font-medium text-gray-600">Assigned Teachers</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ teachers.length }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Total assigned</p>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Country
-                            </label>
-                            <input
-                                v-model="filters.country"
-                                type="text"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                placeholder="PH"
-                            />
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Degree
-                            </label>
-                            <input
-                                v-model="filters.degree"
-                                type="text"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                placeholder="BA English"
-                            />
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Major
-                            </label>
-                            <input
-                                v-model="filters.major"
-                                type="text"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                placeholder="Linguistics"
-                            />
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Accepted
-                            </label>
-                            <select
-                                v-model="filters.accepted"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            >
-                                <option value="">Any</option>
-                                <option value="true">Accepted</option>
-                                <option value="false">Pending</option>
-                            </select>
-                        </div>
-                        <div class="flex items-end gap-3">
-                            <button
-                                type="button"
-                                @click="fetchTeachers"
-                                class="flex-1 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                                :disabled="loading"
-                            >
-                                Apply Filters
-                            </button>
-                            <button
-                                type="button"
-                                @click="resetFilters"
-                                class="flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                                :disabled="loading"
-                            >
-                                Reset
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr class="text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                    <th scope="col" class="px-6 py-3">
-                                        {{ isAdminsPage ? 'Admin' : 'Teacher' }}
-                                    </th>
-                                    <th v-if="!isAdminsPage" scope="col" class="px-6 py-3">
-                                        Profile
-                                    </th>
-                                    <th v-if="!isAdminsPage" scope="col" class="px-6 py-3">
-                                        Equipment
-                                    </th>
-                                    <th v-if="!isAdminsPage" scope="col" class="px-6 py-3">
-                                        Availability
-                                    </th>
-                                    <th v-if="!isAdminsPage" scope="col" class="px-6 py-3">
-                                        Assigned Admin
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Status
-                                    </th>
-                                    <th v-if="isSuperAdmin" scope="col" class="px-6 py-3">
-                                        Actions
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white">
-                                <tr v-if="!loading && rows.length === 0">
-                                    <td
-                                        :colspan="isAdminsPage ? (isSuperAdmin ? 3 : 2) : (isSuperAdmin ? 7 : 6)"
-                                        class="px-6 py-4 text-center text-sm text-gray-500"
-                                    >
-                                        No {{ isAdminsPage ? 'admins' : 'teachers' }} found.
-                                    </td>
-                                </tr>
-                                <tr
-                                    v-for="user in rows"
-                                    :key="user.id"
-                                    class="text-sm text-gray-700"
-                                >
-                                    <td class="px-6 py-4">
-                                        <div class="font-medium text-gray-900">
-                                            {{ user.name }}
-                                        </div>
-                                        <div class="text-gray-500">
-                                            {{ user.email }}
-                                        </div>
-                                        <div class="text-xs text-gray-400">
-                                            {{ user.country }}
-                                        </div>
-                                    </td>
-                                    <td v-if="!isAdminsPage" class="px-6 py-4">
-                                        <div>
-                                            {{ user.teacher_profile?.degree ?? '—' }}
-                                        </div>
-                                        <div class="text-xs text-gray-500">
-                                            Major {{ user.teacher_profile?.major ?? '—' }}
-                                        </div>
-                                        <div class="text-xs text-gray-500">
-                                            English Level {{ user.teacher_profile?.english_level ?? '—' }}
-                                        </div>
-                                    </td>
-                                    <td v-if="!isAdminsPage" class="px-6 py-4">
-                                        <ul class="space-y-1 text-xs text-gray-600">
-                                            <li>
-                                                Webcam:
-                                                <span class="font-medium">
-                                                    {{ user.teacher_profile?.has_webcam ? 'Yes' : 'No' }}
-                                                </span>
-                                            </li>
-                                            <li>
-                                                Headset:
-                                                <span class="font-medium">
-                                                    {{ user.teacher_profile?.has_headset ? 'Yes' : 'No' }}
-                                                </span>
-                                            </li>
-                                            <li>
-                                                Backup Internet:
-                                                <span class="font-medium">
-                                                    {{ user.teacher_profile?.has_backup_internet ? 'Yes' : 'No' }}
-                                                </span>
-                                            </li>
-                                        </ul>
-                                    </td>
-                                    <td v-if="!isAdminsPage" class="px-6 py-4">
-                                        {{ user.teacher_profile?.availability ?? '—' }}
-                                    </td>
-                                    <td v-if="!isAdminsPage" class="px-6 py-4">
-                                        {{
-                                            user.teacher_profile?.assigned_admin?.name ?? 'Unassigned'
-                                        }}
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <span
-                                            class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
-                                            :class="user.accepted ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'"
-                                        >
-                                            {{ user.accepted ? 'Active' : 'Pending' }}
-                                        </span>
-                                    </td>
-                                    <td v-if="isSuperAdmin" class="px-6 py-4">
-                                        <div class="flex items-center gap-2">
-                                            <Button
-                                                @click="router.visit(route(isAdminsPage ? 'admins.show' : 'teachers.show', user.id))"
-                                                variant="outline"
-                                                size="sm"
-                                                class="flex items-center gap-1"
-                                                title="View"
-                                            >
-                                                View
-                                            </Button>
-                                            <Button
-                                                @click="openEditDialog(user)"
-                                                variant="outline"
-                                                size="sm"
-                                                class="flex items-center gap-1"
-                                                title="Edit"
-                                            >
-                                                <PencilIcon class="h-4 w-4" />
-                                                Edit
-                                            </Button>
-                                            <Button
-                                                @click="handleDelete(user)"
-                                                variant="destructive"
-                                                size="sm"
-                                                class="flex items-center gap-1"
-                                                title="Delete"
-                                            >
-                                                <TrashIcon class="h-4 w-4" />
-                                                Delete
-                                            </Button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div
-                        v-if="pagination"
-                        class="flex flex-col items-center justify-between gap-4 border-t border-gray-100 px-6 py-4 text-sm text-gray-600 sm:flex-row"
-                    >
-                        <div>
-                            Page {{ pagination.page }} of
-                            {{ pagination.totalPages ?? 1 }}
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <Button
-                                @click="goToPage(pagination.page - 1)"
-                                variant="outline"
-                                size="sm"
-                                :disabled="loading || pagination.page === 1"
-                            >
-                                Previous
-                            </Button>
-                            <Button
-                                @click="goToPage(pagination.page + 1)"
-                                variant="outline"
-                                size="sm"
-                                :disabled="loading || pagination.page === pagination.totalPages"
-                            >
-                                Next
-                            </Button>
+                        <div class="rounded-lg bg-blue-50 p-3">
+                            <AcademicCapIcon class="h-8 w-8 text-blue-600" />
                         </div>
                     </div>
-                </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Total Students</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ teachers.reduce((sum, t) => sum + (t.students_count || 0), 0) }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Across all teachers</p>
+                        </div>
+                        <div class="rounded-lg bg-green-50 p-3">
+                            <UserGroupIcon class="h-8 w-8 text-green-600" />
+                        </div>
+                    </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Avg Attendance</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ teachers.length > 0 
+                                    ? (teachers.reduce((sum, t) => sum + (t.attendance_rate || 0), 0) / teachers.length).toFixed(1)
+                                    : '0'
+                                }}%
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Average rate</p>
+                        </div>
+                        <div class="rounded-lg bg-purple-50 p-3">
+                            <CheckCircleIcon class="h-8 w-8 text-purple-600" />
+                        </div>
+                    </div>
+                </Card>
             </div>
-        </div>
 
-        <!-- Add/Edit Dialog -->
-        <Dialog :open="dialogOpen" @update:open="dialogOpen = $event">
-            <DialogHeader>
-                <DialogTitle>
-                    {{ editingUser ? `Edit ${isAdminsPage ? 'Admin' : 'Teacher'}` : `Add ${isAdminsPage ? 'Admin' : 'Teacher'}` }}
-                </DialogTitle>
-            </DialogHeader>
-
-            <form @submit.prevent="handleSubmit" class="space-y-4">
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div class="space-y-2">
-                        <Label>
-                            First Name <span class="text-destructive">*</span>
-                        </Label>
-                        <Input
-                            v-model="formData.first_name"
-                            type="text"
-                            required
-                        />
-                    </div>
-                    <div class="space-y-2">
-                        <Label>
-                            Last Name <span class="text-destructive">*</span>
-                        </Label>
-                        <Input
-                            v-model="formData.last_name"
-                            type="text"
-                            required
-                        />
-                    </div>
-                    <div class="space-y-2">
-                        <Label>
-                            Email <span class="text-destructive">*</span>
-                        </Label>
-                        <Input
-                            v-model="formData.email"
-                            type="email"
-                            required
-                        />
-                    </div>
-                    <div class="space-y-2">
-                        <Label>
-                            Password <span class="text-destructive">*</span>
-                            <span v-if="editingUser" class="text-xs text-muted-foreground">(leave blank to keep current)</span>
-                        </Label>
-                        <Input
-                            v-model="formData.password"
-                            type="password"
-                            :required="!editingUser"
-                        />
-                    </div>
-                    <div class="space-y-2">
-                        <Label>Country</Label>
-                        <Input
-                            v-model="formData.country"
-                            type="text"
-                        />
-                    </div>
-                    <div class="space-y-2">
-                        <Label>Timezone</Label>
-                        <Input
-                            v-model="formData.timezone"
-                            type="text"
-                        />
-                    </div>
-                    <div v-if="!editingUser" class="space-y-2">
-                        <Label>
-                            Role <span class="text-destructive">*</span>
-                        </Label>
-                        <select
-                            v-model="formData.role"
-                            required
-                            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        >
-                            <option value="teacher">Teacher</option>
-                            <option value="admin">Admin</option>
-                        </select>
-                    </div>
-                    <div class="space-y-2">
-                        <Label>Status</Label>
-                        <select
-                            v-model="formData.accepted"
-                            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        >
-                            <option :value="false">Pending</option>
-                            <option :value="true">Accepted/Active</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Teacher-specific fields (only show for teachers) -->
-                <template v-if="formData.role === 'teacher' || (!editingUser && !isAdminsPage)">
-                    <div class="border-t pt-4">
-                        <h4 class="text-sm font-medium mb-3">Teacher Profile (Optional)</h4>
-                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <div class="space-y-2">
-                                <Label>Phone</Label>
-                                <Input
-                                    v-model="formData.phone"
-                                    type="text"
-                                />
-                            </div>
-                            <div class="space-y-2">
-                                <Label>Degree</Label>
-                                <Input
-                                    v-model="formData.degree"
-                                    type="text"
-                                />
-                            </div>
-                            <div class="space-y-2">
-                                <Label>Major</Label>
-                                <Input
-                                    v-model="formData.major"
-                                    type="text"
-                                />
-                            </div>
-                            <div class="space-y-2">
-                                <Label>English Level</Label>
-                                <Input
-                                    v-model="formData.english_level"
-                                    type="text"
-                                />
-                            </div>
-                            <div class="sm:col-span-2 space-y-2">
-                                <Label>Availability</Label>
-                                <Input
-                                    v-model="formData.availability"
-                                    type="text"
-                                />
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <input
-                                    v-model="formData.has_webcam"
-                                    type="checkbox"
-                                    class="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                                />
-                                <Label class="!mb-0">Has Webcam</Label>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <input
-                                    v-model="formData.has_headset"
-                                    type="checkbox"
-                                    class="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                                />
-                                <Label class="!mb-0">Has Headset</Label>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <input
-                                    v-model="formData.has_backup_internet"
-                                    type="checkbox"
-                                    class="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                                />
-                                <Label class="!mb-0">Has Backup Internet</Label>
-                            </div>
+            <!-- Teachers Table -->
+            <AdvancedTable
+                v-if="!loading"
+                title="All Assigned Teachers"
+                :columns="columns"
+                :data="teachers"
+                :searchable="true"
+                :paginated="true"
+                :filters="filters"
+                :items-per-page="25"
+                row-key="id"
+            >
+                <template #cell-name="{ row }">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600">
+                            <span class="text-sm font-semibold text-white">
+                                {{ row.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) }}
+                            </span>
+                        </div>
+                        <div>
+                            <div class="font-medium text-gray-900">{{ row.name }}</div>
+                            <div v-if="row.degree" class="text-xs text-gray-500">{{ row.degree }}</div>
                         </div>
                     </div>
                 </template>
 
-                <DialogFooter>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        @click="dialogOpen = false"
-                        :disabled="submitting"
+                <template #cell-email="{ row }">
+                    <div class="text-gray-900">{{ row.email || '—' }}</div>
+                </template>
+
+                <template #cell-country="{ row }">
+                    <div class="text-gray-900">{{ row.country || '—' }}</div>
+                </template>
+
+                <template #cell-students_count="{ row }">
+                    <Badge variant="secondary">
+                        <UserGroupIcon class="h-3 w-3 mr-1 inline" />
+                        {{ row.students_count || 0 }}
+                    </Badge>
+                </template>
+
+                <template #cell-classes_count="{ row }">
+                    <Badge variant="secondary">
+                        <CalendarIcon class="h-3 w-3 mr-1 inline" />
+                        {{ row.classes_count || 0 }}
+                    </Badge>
+                </template>
+
+                <template #cell-attendance_rate="{ row }">
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium text-gray-900">{{ row.attendance_rate || 0 }}%</span>
+                        <div class="h-2 w-16 rounded-full bg-gray-200">
+                            <div 
+                                class="h-2 rounded-full"
+                                :class="{
+                                    'bg-green-500': row.attendance_rate >= 90,
+                                    'bg-yellow-500': row.attendance_rate >= 75 && row.attendance_rate < 90,
+                                    'bg-red-500': row.attendance_rate < 75,
+                                }"
+                                :style="{ width: `${Math.min(row.attendance_rate || 0, 100)}%` }"
+                            ></div>
+                        </div>
+                    </div>
+                </template>
+
+                <template #cell-status="{ row }">
+                    <Badge 
+                        :variant="row.status === 'active' ? 'success' : 'warning'"
                     >
-                        Cancel
-                    </Button>
-                    <Button
-                        type="submit"
-                        :disabled="submitting"
-                    >
-                        {{ submitting ? 'Saving...' : (editingUser ? 'Update' : 'Create') }}
-                    </Button>
-                </DialogFooter>
-            </form>
-        </Dialog>
+                        {{ row.status || 'active' }}
+                    </Badge>
+                </template>
+
+                <template #row-actions="{ row }">
+                    <div class="flex items-center justify-end gap-2">
+                        <button
+                            @click="handleView(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                            title="View Details"
+                        >
+                            <EyeIcon class="h-5 w-5" />
+                        </button>
+                        <button
+                            @click="handleEdit(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                            title="Edit"
+                        >
+                            <PencilIcon class="h-5 w-5" />
+                        </button>
+                    </div>
+                </template>
+            </AdvancedTable>
+
+            <!-- Loading State -->
+            <div v-else class="space-y-4">
+                <div class="h-64 rounded-xl bg-gray-200 animate-pulse"></div>
+            </div>
+        </div>
     </AuthenticatedLayout>
 </template>
-

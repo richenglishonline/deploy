@@ -43,7 +43,7 @@
                                     @click="handleSort(column.key)"
                                     class="text-gray-400 hover:text-gray-600"
                                 >
-                                    <ArrowUpDownIcon class="h-4 w-4" />
+                                    <ArrowsUpDownIcon class="h-4 w-4" />
                                 </button>
                             </div>
                         </th>
@@ -130,7 +130,7 @@
 import { ref, computed } from 'vue';
 import {
     MagnifyingGlassIcon,
-    ArrowUpDownIcon,
+    ArrowsUpDownIcon,
     InboxIcon,
 } from '@heroicons/vue/24/outline';
 

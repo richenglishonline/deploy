@@ -1,409 +1,318 @@
 <script setup>
-import { reactive, ref, onMounted, computed } from "vue";
-import { Head, usePage, router } from "@inertiajs/vue3";
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
-import api from "@/lib/api";
-import Button from "@/Components/ui/Button.vue";
-import { BanknotesIcon, ChartBarIcon } from "@heroicons/vue/24/outline";
+import { ref, onMounted, computed } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AdvancedTable from '@/Components/ui/AdvancedTable.vue';
+import Card from '@/Components/ui/Card.vue';
+import Badge from '@/Components/ui/Badge.vue';
+import Button from '@/Components/ui/Button.vue';
+import {
+    PlusIcon,
+    PencilIcon,
+    BanknotesIcon,
+    AcademicCapIcon,
+    CalendarIcon,
+    CurrencyDollarIcon,
+    ClockIcon,
+} from '@heroicons/vue/24/outline';
+import api from '@/lib/api';
 
 const page = usePage();
-const isSuperAdmin = computed(
-    () => page.props.auth?.user?.role === "super-admin"
-);
-
 const loading = ref(false);
-const payouts = ref([]);
-const pagination = ref(null);
-const teacherOptions = ref([]);
-const summary = ref(null);
+const salaries = ref([]);
+const stats = ref(null);
 
-const filters = reactive({
-    teacher_id: "",
-    status: "",
-    start_date: "",
-    end_date: "",
-    page: 1,
-    limit: 20,
-});
+const columns = [
+    {
+        key: 'teacher',
+        label: 'Teacher',
+        sortable: true,
+    },
+    {
+        key: 'rate_per_hour',
+        label: 'Rate/Hour',
+        sortable: true,
+        format: 'currency',
+        align: 'right',
+    },
+    {
+        key: 'total_hours',
+        label: 'Total Hours',
+        sortable: true,
+        align: 'center',
+        format: 'number',
+    },
+    {
+        key: 'base_salary',
+        label: 'Base Salary',
+        sortable: true,
+        format: 'currency',
+        align: 'right',
+    },
+    {
+        key: 'bonus',
+        label: 'Bonus',
+        sortable: true,
+        format: 'currency',
+        align: 'right',
+    },
+    {
+        key: 'total_salary',
+        label: 'Total Salary',
+        sortable: true,
+        format: 'currency',
+        align: 'right',
+    },
+    {
+        key: 'period',
+        label: 'Period',
+        sortable: true,
+    },
+];
 
-const loadFilters = async () => {
-    try {
-        const teachersRes = await api.get("/dashboard/teachers");
-        teacherOptions.value = teachersRes.data;
-    } catch (error) {
-        console.error("Error loading filters:", error);
-    }
-};
+const filters = [
+    {
+        key: 'period',
+        label: 'Period',
+        type: 'select',
+        options: [
+            { value: '', label: 'All Periods' },
+            { value: '2025-01', label: 'January 2025' },
+            { value: '2025-02', label: 'February 2025' },
+            { value: '2025-03', label: 'March 2025' },
+        ],
+    },
+];
 
 const fetchSalaries = async () => {
     loading.value = true;
     try {
-        const { data } = await api.get('/salary', { params: filters });
-        payouts.value = data.salaries;
-        pagination.value = data.pagination;
-
-        // Calculate summary
-        const totalAmount = payouts.value.reduce((sum, p) => sum + (parseFloat(p.total_amount) || 0), 0);
-        const totalBase = payouts.value.reduce((sum, p) => sum + (parseFloat(p.base_salary) || 0), 0);
-        const totalBonus = payouts.value.reduce((sum, p) => sum + (parseFloat(p.bonus) || 0), 0);
-        const totalDeduction = payouts.value.reduce((sum, p) => sum + (parseFloat(p.deduction) || 0), 0);
-
-        summary.value = {
-            total_salaries: payouts.value.length,
-            total_amount: totalAmount,
-            total_base: totalBase,
-            total_bonus: totalBonus,
-            total_deduction: totalDeduction,
-            pending: payouts.value.filter(p => p.status === 'pending').length,
-            processing: payouts.value.filter(p => p.status === 'processing').length,
-            paid: payouts.value.filter(p => p.status === 'paid').length,
-        };
+        const { data } = await api.get('/salary');
+        salaries.value = Array.isArray(data.salaries || data) ? (data.salaries || data).map(salary => ({
+            ...salary,
+            teacher: salary.teacher ? `${salary.teacher.first_name || ''} ${salary.teacher.last_name || ''}`.trim() || salary.teacher.email : 'N/A',
+            total_salary: (parseFloat(salary.base_salary || 0) + parseFloat(salary.bonus || 0)).toFixed(2),
+            period: salary.period || `${salary.start_date} - ${salary.end_date}`,
+        })) : [];
     } catch (error) {
         console.error('Error fetching salaries:', error);
+        salaries.value = [];
     } finally {
         loading.value = false;
     }
 };
 
-const goToPage = (pageNum) => {
-    if (!pagination.value) return;
-    if (pageNum < 1 || pageNum > pagination.value.totalPages) return;
-    filters.page = pageNum;
+const fetchStats = async () => {
+    try {
+        const { data } = await api.get('/dashboard/stats');
+        stats.value = data?.stats || {};
+    } catch (error) {
+        console.error('Error fetching stats:', error);
+    }
+};
+
+const handleCreate = () => {
+    router.visit('/super-admin/salary/create');
+};
+
+const handleEdit = (row) => {
+    router.visit(`/super-admin/salary/${row.id}/edit`);
+};
+
+const totalSalary = computed(() => {
+    return salaries.value.reduce((sum, s) => sum + parseFloat(s.total_salary || 0), 0).toFixed(2);
+});
+
+const totalHours = computed(() => {
+    return salaries.value.reduce((sum, s) => sum + parseFloat(s.total_hours || 0), 0).toFixed(2);
+});
+
+const handleExport = (data) => {
+    const headers = columns.map(c => c.label).join(',');
+    const rows = data.map(row => 
+        columns.map(col => {
+            let value = row[col.key] || '';
+            if (col.format === 'currency') {
+                value = typeof value === 'number' ? value : parseFloat(value) || 0;
+            }
+            return `"${String(value).replace(/"/g, '""')}"`;
+        }).join(',')
+    ).join('\n');
+    const csv = `${headers}\n${rows}`;
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `salaries-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+};
+
+onMounted(() => {
     fetchSalaries();
-};
-
-const resetFilters = () => {
-    filters.teacher_id = "";
-    filters.status = "";
-    filters.start_date = "";
-    filters.end_date = "";
-    filters.page = 1;
-    fetchSalaries();
-};
-
-const formatDate = (dateString) => {
-    if (!dateString) return "—";
-    return new Date(dateString).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
-
-const formatCurrency = (amount) => {
-    if (!amount) return "$0.00";
-    return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-    }).format(amount);
-};
-
-onMounted(async () => {
-    await loadFilters();
-    await fetchSalaries();
+    fetchStats();
 });
 </script>
 
 <template>
     <Head title="Salary Management" />
-
+    
     <AuthenticatedLayout>
-        <template #header>
+        <div class="space-y-6 pb-8">
+            <!-- Page Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h2
-                        class="text-xl font-semibold leading-tight text-gray-800"
-                    >
-                        Salary Management
-                    </h2>
-                    <p class="text-sm text-gray-500">
-                        Manage teacher salaries and payouts with comprehensive
-                        analytics.
+                    <h1 class="text-3xl font-bold text-gray-900">Salary Management</h1>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Manage teacher salaries and compensation
                     </p>
                 </div>
-                    <Button
-                        @click="fetchSalaries"
-                        :disabled="loading"
-                    >
-                        Refresh
-                    </Button>
+                <Button @click="handleCreate" variant="primary">
+                    <PlusIcon class="h-5 w-5 mr-2" />
+                    Configure Salary
+                </Button>
             </div>
-        </template>
 
-        <div class="py-10">
-            <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
-                <!-- Summary Cards -->
-                <div
-                    v-if="summary"
-                    class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4"
-                >
-                    <div
-                        class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-                    >
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <BanknotesIcon class="h-8 w-8 text-green-600" />
-                            </div>
-                            <div class="ml-4">
-                                <p class="text-sm font-medium text-gray-500">
-                                    Total Amount
-                                </p>
-                                <p class="text-2xl font-semibold text-gray-900">
-                                    {{ formatCurrency(summary.total_amount) }}
-                                </p>
-                            </div>
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Total Teachers</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ salaries.length }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">With salary config</p>
+                        </div>
+                        <div class="rounded-lg bg-blue-50 p-3">
+                            <AcademicCapIcon class="h-8 w-8 text-blue-600" />
                         </div>
                     </div>
-                    <div
-                        class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-                    >
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <ChartBarIcon class="h-8 w-8 text-blue-600" />
-                            </div>
-                            <div class="ml-4">
-                                <p class="text-sm font-medium text-gray-500">Total Base Salary</p>
-                                <p class="text-2xl font-semibold text-gray-900">
-                                    {{ formatCurrency(summary.total_base) }}
-                                </p>
-                            </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Total Salary</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                ${{ totalSalary.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">This period</p>
+                        </div>
+                        <div class="rounded-lg bg-green-50 p-3">
+                            <CurrencyDollarIcon class="h-8 w-8 text-green-600" />
                         </div>
                     </div>
-                    <div
-                        class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-                    >
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <ChartBarIcon class="h-8 w-8 text-purple-600" />
-                            </div>
-                            <div class="ml-4">
-                                <p class="text-sm font-medium text-gray-500">Total Bonus</p>
-                                <p class="text-2xl font-semibold text-gray-900">
-                                    {{ formatCurrency(summary.total_bonus) }}
-                                </p>
-                            </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Total Hours</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ totalHours }}h
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Hours worked</p>
+                        </div>
+                        <div class="rounded-lg bg-purple-50 p-3">
+                            <ClockIcon class="h-8 w-8 text-purple-600" />
                         </div>
                     </div>
-                    <div
-                        class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-                    >
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <BanknotesIcon
-                                    class="h-8 w-8 text-yellow-600"
-                                />
-                            </div>
-                            <div class="ml-4">
-                                <p class="text-sm font-medium text-gray-500">Total Deduction</p>
-                                <p class="text-2xl font-semibold text-gray-900">
-                                    {{ formatCurrency(summary.total_deduction) }}
-                                </p>
-                            </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Avg Rate/Hour</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                ${{ salaries.length > 0 
+                                    ? (salaries.reduce((sum, s) => sum + parseFloat(s.rate_per_hour || 0), 0) / salaries.length).toFixed(2)
+                                    : '0.00'
+                                }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Average</p>
+                        </div>
+                        <div class="rounded-lg bg-orange-50 p-3">
+                            <BanknotesIcon class="h-8 w-8 text-orange-600" />
                         </div>
                     </div>
-                </div>
+                </Card>
+            </div>
 
-                <!-- Filters -->
-                <div
-                    class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-                >
-                    <form
-                        class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-                    >
-                        <div>
-                            <label
-                                class="block text-sm font-medium text-gray-700"
-                            >
-                                Teacher
-                            </label>
-                            <select
-                                v-model="filters.teacher_id"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            >
-                                <option value="">All Teachers</option>
-                                <option
-                                    v-for="teacher in teacherOptions"
-                                    :key="teacher.id"
-                                    :value="teacher.id"
-                                >
-                                    {{ teacher.name }}
-                                </option>
-                            </select>
+            <!-- Salaries Table -->
+            <AdvancedTable
+                v-if="!loading"
+                title="All Salary Configurations"
+                :columns="columns"
+                :data="salaries"
+                :searchable="true"
+                :paginated="true"
+                :exportable="true"
+                :filters="filters"
+                :items-per-page="25"
+                row-key="id"
+                @export="handleExport"
+            >
+                <template #cell-teacher="{ row }">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600">
+                            <span class="text-sm font-semibold text-white">
+                                {{ row.teacher.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) }}
+                            </span>
                         </div>
-                        <div>
-                            <label
-                                class="block text-sm font-medium text-gray-700"
-                            >
-                                Status
-                            </label>
-                            <select
-                                v-model="filters.status"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            >
-                                <option value="">All Statuses</option>
-                                <option value="pending">Pending</option>
-                                <option value="processing">Processing</option>
-                                <option value="paid">Paid</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label
-                                class="block text-sm font-medium text-gray-700"
-                            >
-                                Start Date
-                            </label>
-                            <input
-                                v-model="filters.start_date"
-                                type="date"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                        </div>
-                        <div>
-                            <label
-                                class="block text-sm font-medium text-gray-700"
-                            >
-                                End Date
-                            </label>
-                            <input
-                                v-model="filters.end_date"
-                                type="date"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                        </div>
-                        <div
-                            class="flex items-end gap-3 sm:col-span-2 lg:col-span-4"
-                        >
-                            <button
-                                type="button"
-                                @click="fetchSalaries"
-                                class="flex-1 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                                :disabled="loading"
-                            >
-                                Apply Filters
-                            </button>
-                            <button
-                                type="button"
-                                @click="resetFilters"
-                                class="flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                                :disabled="loading"
-                            >
-                                Reset
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Payouts Table -->
-                <div
-                    class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
-                >
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr class="text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                    <th scope="col" class="px-6 py-3">Teacher</th>
-                                    <th scope="col" class="px-6 py-3">Period</th>
-                                    <th scope="col" class="px-6 py-3">Base Salary</th>
-                                    <th scope="col" class="px-6 py-3">Bonus</th>
-                                    <th scope="col" class="px-6 py-3">Deduction</th>
-                                    <th scope="col" class="px-6 py-3">Total Amount</th>
-                                    <th scope="col" class="px-6 py-3">Status</th>
-                                    <th scope="col" class="px-6 py-3">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white">
-                                <tr v-if="!loading && payouts.length === 0">
-                                    <td
-                                        colspan="8"
-                                        class="px-6 py-4 text-center text-sm text-gray-500"
-                                    >
-                                        No salaries found.
-                                    </td>
-                                </tr>
-                                <tr
-                                    v-for="payout in payouts"
-                                    :key="payout.id"
-                                    class="text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                    <td class="px-6 py-4">
-                                        <div class="font-medium text-gray-900">
-                                            {{
-                                                payout.teacher?.name ??
-                                                "Unknown"
-                                            }}
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        {{ formatDate(payout.start_date) }} -
-                                        {{ formatDate(payout.end_date) }}
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        {{ formatCurrency(payout.base_salary) }}
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        {{ formatCurrency(payout.bonus) }}
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        {{ formatCurrency(payout.deduction) }}
-                                    </td>
-                                    <td class="px-6 py-4 font-semibold text-gray-900">
-                                        {{ formatCurrency(payout.total_amount) }}
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <span
-                                            :class="[
-                                                'px-2 py-1 text-xs font-medium rounded',
-                                                payout.status === 'paid' ? 'bg-green-100 text-green-800' :
-                                                payout.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
-                                                'bg-gray-100 text-gray-800',
-                                            ]"
-                                        >
-                                            {{ payout.status }}
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4" @click.stop>
-                                        <Button
-                                            @click="router.visit(route('salary.index'))"
-                                            variant="outline"
-                                            size="sm"
-                                        >
-                                            View
-                                        </Button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <span class="font-medium text-gray-900">{{ row.teacher }}</span>
                     </div>
+                </template>
 
-                    <div
-                        v-if="pagination"
-                        class="flex flex-col items-center justify-between gap-4 border-t border-gray-100 px-6 py-4 text-sm text-gray-600 sm:flex-row"
-                    >
-                        <div>
-                            Page {{ pagination.page }} of
-                            {{ pagination.totalPages ?? 1 }}
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button
-                                @click="goToPage(pagination.page - 1)"
-                                class="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50"
-                                :disabled="loading || pagination.page === 1"
-                            >
-                                Previous
-                            </button>
-                            <button
-                                @click="goToPage(pagination.page + 1)"
-                                class="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50"
-                                :disabled="
-                                    loading ||
-                                    pagination.page === pagination.totalPages
-                                "
-                            >
-                                Next
-                            </button>
-                        </div>
+                <template #cell-rate_per_hour="{ row }">
+                    <div class="text-right font-medium text-gray-900">
+                        ${{ parseFloat(row.rate_per_hour || 0).toFixed(2) }}
                     </div>
-                </div>
+                </template>
+
+                <template #cell-total_hours="{ row }">
+                    <div class="text-center font-medium text-gray-900">
+                        {{ parseFloat(row.total_hours || 0).toFixed(2) }}h
+                    </div>
+                </template>
+
+                <template #cell-base_salary="{ row }">
+                    <div class="text-right font-medium text-gray-900">
+                        ${{ parseFloat(row.base_salary || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                    </div>
+                </template>
+
+                <template #cell-bonus="{ row }">
+                    <div class="text-right font-medium text-green-600">
+                        +${{ parseFloat(row.bonus || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                    </div>
+                </template>
+
+                <template #cell-total_salary="{ row }">
+                    <div class="text-right font-semibold text-gray-900">
+                        ${{ parseFloat(row.total_salary || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                    </div>
+                </template>
+
+                <template #cell-period="{ row }">
+                    <div class="text-gray-900">{{ row.period || '—' }}</div>
+                </template>
+
+                <template #row-actions="{ row }">
+                    <button
+                        @click="handleEdit(row)"
+                        class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                        title="Edit"
+                    >
+                        <PencilIcon class="h-5 w-5" />
+                    </button>
+                </template>
+            </AdvancedTable>
+
+            <!-- Loading State -->
+            <div v-else class="space-y-4">
+                <div class="h-64 rounded-xl bg-gray-200 animate-pulse"></div>
             </div>
         </div>
     </AuthenticatedLayout>

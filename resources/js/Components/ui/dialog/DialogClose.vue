@@ -1,5 +1,5 @@
 <script setup>
-import { DialogClose } from "reka-ui";
+import { DialogClose as RadixDialogClose } from 'radix-vue';
 
 const props = defineProps({
   asChild: { type: Boolean, required: false },
@@ -8,7 +8,7 @@ const props = defineProps({
 </script>
 
 <template>
-  <DialogClose v-bind="props">
+  <RadixDialogClose :as-child="asChild" :as="as">
     <slot />
-  </DialogClose>
+  </RadixDialogClose>
 </template>

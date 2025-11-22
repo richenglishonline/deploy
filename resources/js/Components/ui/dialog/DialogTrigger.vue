@@ -1,5 +1,5 @@
 <script setup>
-import { DialogTrigger } from "reka-ui";
+import { DialogTrigger as RadixDialogTrigger } from 'radix-vue';
 
 const props = defineProps({
   asChild: { type: Boolean, required: false },
@@ -8,7 +8,7 @@ const props = defineProps({
 </script>
 
 <template>
-  <DialogTrigger v-bind="props">
+  <RadixDialogTrigger :as-child="asChild" :as="as">
     <slot />
-  </DialogTrigger>
+  </RadixDialogTrigger>
 </template>

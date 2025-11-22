@@ -1,341 +1,375 @@
 <script setup>
-import { ref, reactive, onMounted, computed } from "vue";
-import { Head, router, usePage } from "@inertiajs/vue3";
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
-import api from "@/lib/api";
+import { ref, onMounted, computed } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AdvancedTable from '@/Components/ui/AdvancedTable.vue';
+import Button from '@/Components/ui/Button.vue';
+import Badge from '@/Components/ui/Badge.vue';
+import Card from '@/Components/ui/Card.vue';
+import {
+    PlusIcon,
+    EyeIcon,
+    PencilIcon,
+    TrashIcon,
+    BookOpenIcon,
+    DocumentTextIcon,
+    UserGroupIcon,
+    ArrowDownTrayIcon,
+} from '@heroicons/vue/24/outline';
+import api from '@/lib/api';
 
 const page = usePage();
-const isSuperAdmin = computed(
-    () => page.props.auth?.user?.role === "super-admin"
-);
-
 const loading = ref(false);
 const books = ref([]);
-const pagination = ref(null);
+const stats = ref(null);
 
-const filters = reactive({
-    search: "",
-    page: 1,
-    limit: 10,
-});
+const columns = [
+    {
+        key: 'title',
+        label: 'Title',
+        sortable: true,
+    },
+    {
+        key: 'author',
+        label: 'Author',
+        sortable: true,
+    },
+    {
+        key: 'level',
+        label: 'Level',
+        sortable: true,
+        align: 'center',
+    },
+    {
+        key: 'category',
+        label: 'Category',
+        sortable: true,
+    },
+    {
+        key: 'assigned_count',
+        label: 'Assigned',
+        sortable: true,
+        align: 'center',
+    },
+    {
+        key: 'file_size',
+        label: 'File Size',
+        sortable: true,
+        align: 'right',
+    },
+    {
+        key: 'created_at',
+        label: 'Uploaded',
+        sortable: true,
+        format: 'date',
+    },
+];
 
-const fileInput = ref(null);
-const newBook = reactive({
-    title: "",
-    file: null,
-});
+const filters = [
+    {
+        key: 'level',
+        label: 'Level',
+        type: 'select',
+        options: [
+            { value: '', label: 'All Levels' },
+            { value: 'beginner', label: 'Beginner' },
+            { value: 'intermediate', label: 'Intermediate' },
+            { value: 'advanced', label: 'Advanced' },
+        ],
+    },
+    {
+        key: 'category',
+        label: 'Category',
+        type: 'select',
+        options: [
+            { value: '', label: 'All Categories' },
+            { value: 'grammar', label: 'Grammar' },
+            { value: 'vocabulary', label: 'Vocabulary' },
+            { value: 'reading', label: 'Reading' },
+            { value: 'writing', label: 'Writing' },
+        ],
+    },
+];
 
 const fetchBooks = async () => {
     loading.value = true;
     try {
-        const { data } = await api.get("/books", { params: filters });
-        books.value = data.books;
-        pagination.value = data.pagination;
+        const { data } = await api.get('/books');
+        books.value = Array.isArray(data.books || data) ? (data.books || data).map(book => ({
+            ...book,
+            assigned_count: book.assignments?.length || 0,
+            file_size: book.file_size ? `${(book.file_size / 1024 / 1024).toFixed(2)} MB` : 'N/A',
+        })) : [];
     } catch (error) {
-        console.error(error);
+        console.error('Error fetching books:', error);
+        books.value = [];
     } finally {
         loading.value = false;
     }
 };
 
-const goToPage = (page) => {
-    if (!pagination.value) return;
-    if (page < 1 || page > pagination.value.totalPages) return;
-    filters.page = page;
-    fetchBooks();
-};
-
-const handleFileChange = (event) => {
-    const [file] = event.target.files ?? [];
-    newBook.file = file ?? null;
-};
-
-const resetUploader = () => {
-    newBook.title = "";
-    newBook.file = null;
-    if (fileInput.value) {
-        fileInput.value.value = "";
-    }
-};
-
-const uploadBook = async () => {
-    if (!newBook.title || !newBook.file) return;
-    const formData = new FormData();
-    formData.append("title", newBook.title);
-    formData.append("file", newBook.file);
+const fetchStats = async () => {
     try {
-        loading.value = true;
-        await api.post("/books", formData, {
-            headers: {
-                "Content-Type": "multipart/form-data",
-            },
-        });
-        resetUploader();
-        await fetchBooks();
+        const { data } = await api.get('/dashboard/stats');
+        stats.value = data?.stats || {};
     } catch (error) {
-        console.error(error);
-    } finally {
-        loading.value = false;
+        console.error('Error fetching stats:', error);
     }
 };
 
-const deleteBook = async (book) => {
-    if (!confirm(`Delete ${book.title}?`)) return;
+const handleCreate = () => {
+    router.visit('/super-admin/books/create');
+};
+
+const handleView = (row) => {
+    router.visit(`/super-admin/books/${row.id}`);
+};
+
+const handleEdit = (row) => {
+    router.visit(`/super-admin/books/${row.id}?edit=true`);
+};
+
+const handleDelete = async (book) => {
+    if (!confirm(`Are you sure you want to delete "${book.title}"?`)) return;
+    
     try {
-        loading.value = true;
         await api.delete(`/books/${book.id}`);
         await fetchBooks();
+        await fetchStats();
     } catch (error) {
-        console.error(error);
-    } finally {
-        loading.value = false;
+        console.error('Error deleting book:', error);
+        alert('Failed to delete book');
     }
 };
 
-onMounted(fetchBooks);
+const handleDownload = async (book) => {
+    try {
+        const response = await api.get(`/books/${book.id}/download`, {
+            responseType: 'blob',
+        });
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', book.file_name || `${book.title}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('Error downloading book:', error);
+        alert('Failed to download book');
+    }
+};
+
+const handleBulkDelete = async () => {
+    if (!confirm(`Are you sure you want to delete ${selectedRows.value.length} book(s)?`)) return;
+    
+    try {
+        await Promise.all(selectedRows.value.map(book => api.delete(`/books/${book.id}`)));
+        selectedRows.value = [];
+        await fetchBooks();
+        await fetchStats();
+    } catch (error) {
+        console.error('Error bulk deleting books:', error);
+        alert('Failed to delete some books');
+    }
+};
+
+const handleExport = (data) => {
+    const headers = columns.map(c => c.label).join(',');
+    const rows = data.map(row => 
+        columns.map(col => `"${row[col.key] || ''}"`).join(',')
+    ).join('\n');
+    const csv = `${headers}\n${rows}`;
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `books-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+};
+
+onMounted(() => {
+    fetchBooks();
+    fetchStats();
+});
 </script>
 
 <template>
-    <Head title="Books" />
-
+    <Head title="Books Management" />
+    
     <AuthenticatedLayout>
-        <template #header>
+        <div class="space-y-6 pb-8">
+            <!-- Page Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h2
-                        class="text-xl font-semibold leading-tight text-gray-800"
-                    >
-                        Books
-                    </h2>
-                    <p class="text-sm text-gray-500">
-                        Manage lesson materials, download resources, and upload
-                        new content.
+                    <h1 class="text-3xl font-bold text-gray-900">Books Management</h1>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Manage curriculum books and materials
                     </p>
                 </div>
+                <Button @click="handleCreate" variant="primary">
+                    <PlusIcon class="h-5 w-5 mr-2" />
+                    Upload Book
+                </Button>
             </div>
-        </template>
 
-        <div class="py-10">
-            <div class="mx-auto max-w-[95%] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="grid gap-6 lg:grid-cols-3">
-                    <div
-                        class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm lg:col-span-2"
-                    >
-                        <div class="mb-4 flex items-center gap-3">
-                            <input
-                                v-model="filters.search"
-                                type="text"
-                                class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                placeholder="Search title or filename"
-                            />
-                            <button
-                                @click="fetchBooks"
-                                class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                                :disabled="loading"
-                            >
-                                Search
-                            </button>
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Total Books</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ stats?.totalBooks || books.length }}
+                            </p>
                         </div>
+                        <div class="rounded-lg bg-blue-50 p-3">
+                            <BookOpenIcon class="h-8 w-8 text-blue-600" />
+                        </div>
+                    </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Assigned Books</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ books.filter(b => b.assigned_count > 0).length }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">In use</p>
+                        </div>
+                        <div class="rounded-lg bg-green-50 p-3">
+                            <DocumentTextIcon class="h-8 w-8 text-green-600" />
+                        </div>
+                    </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Total Assignments</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ books.reduce((sum, b) => sum + (b.assigned_count || 0), 0) }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Active</p>
+                        </div>
+                        <div class="rounded-lg bg-purple-50 p-3">
+                            <UserGroupIcon class="h-8 w-8 text-purple-600" />
+                        </div>
+                    </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Storage Used</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ (books.reduce((sum, b) => sum + (b.file_size ? parseFloat(b.file_size) : 0), 0) / 1024).toFixed(2) }} GB
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Total size</p>
+                        </div>
+                        <div class="rounded-lg bg-orange-50 p-3">
+                            <ArrowDownTrayIcon class="h-8 w-8 text-orange-600" />
+                        </div>
+                    </div>
+                </Card>
+            </div>
 
-                        <div
-                            class="overflow-hidden rounded-lg border border-gray-200"
+            <!-- Books Table -->
+            <AdvancedTable
+                v-if="!loading"
+                title="All Books"
+                :columns="columns"
+                :data="books"
+                :searchable="true"
+                :paginated="true"
+                :selectable="true"
+                :exportable="true"
+                :filters="filters"
+                :items-per-page="25"
+                row-key="id"
+                @export="handleExport"
+                @bulk-delete="handleBulkDelete"
+            >
+                <template #cell-title="{ row }">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500 to-red-600">
+                            <BookOpenIcon class="h-5 w-5 text-white" />
+                        </div>
+                        <div>
+                            <div class="font-medium text-gray-900">{{ row.title || 'Untitled' }}</div>
+                            <div v-if="row.isbn" class="text-xs text-gray-500">ISBN: {{ row.isbn }}</div>
+                        </div>
+                    </div>
+                </template>
+
+                <template #cell-author="{ row }">
+                    <div class="text-gray-900">{{ row.author || '—' }}</div>
+                </template>
+
+                <template #cell-level="{ row }">
+                    <Badge 
+                        :variant="row.level === 'beginner' ? 'primary' : row.level === 'intermediate' ? 'warning' : 'success'"
+                    >
+                        {{ row.level || 'N/A' }}
+                    </Badge>
+                </template>
+
+                <template #cell-category="{ row }">
+                    <div class="text-gray-900">{{ row.category || '—' }}</div>
+                </template>
+
+                <template #cell-assigned_count="{ row }">
+                    <Badge variant="secondary">
+                        <UserGroupIcon class="h-3 w-3 mr-1 inline" />
+                        {{ row.assigned_count || 0 }}
+                    </Badge>
+                </template>
+
+                <template #cell-file_size="{ row }">
+                    <div class="text-right text-gray-900">{{ row.file_size || '—' }}</div>
+                </template>
+
+                <template #row-actions="{ row }">
+                    <div class="flex items-center justify-end gap-2">
+                        <button
+                            @click="handleDownload(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                            title="Download"
                         >
-                            <div class="overflow-x-auto">
-                                <table
-                                    class="min-w-full divide-y divide-gray-200"
-                                >
-                                    <thead class="bg-gray-50">
-                                        <tr
-                                            class="text-left text-xs font-semibold uppercase tracking-wider text-gray-500"
-                                        >
-                                            <th scope="col" class="px-6 py-3">
-                                                Title
-                                            </th>
-                                            <th scope="col" class="px-6 py-3">
-                                                Filename
-                                            </th>
-                                            <th scope="col" class="px-6 py-3">
-                                                Uploaded
-                                            </th>
-                                            <th
-                                                scope="col"
-                                                class="px-6 py-3"
-                                            ></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody
-                                        class="divide-y divide-gray-200 bg-white"
-                                    >
-                                        <tr
-                                            v-if="
-                                                !loading && books.length === 0
-                                            "
-                                        >
-                                            <td
-                                                colspan="4"
-                                                class="px-6 py-4 text-center text-sm text-gray-500"
-                                            >
-                                                No books found.
-                                            </td>
-                                        </tr>
-                                        <tr
-                                            v-for="book in books"
-                                            :key="book.id"
-                                            class="text-sm text-gray-700"
-                                        >
-                                            <td class="px-6 py-4">
-                                                <div
-                                                    class="font-medium text-gray-900"
-                                                >
-                                                    {{ book.title }}
-                                                </div>
-                                            </td>
-                                            <td class="px-6 py-4">
-                                                {{
-                                                    book.original_filename ??
-                                                    book.filename
-                                                }}
-                                            </td>
-                                            <td class="px-6 py-4">
-                                                {{
-                                                    book.created_at
-                                                        ? new Date(
-                                                              book.created_at
-                                                          ).toLocaleDateString()
-                                                        : "—"
-                                                }}
-                                            </td>
-                                            <td class="px-6 py-4 text-right">
-                                                <div
-                                                    class="flex items-center justify-end gap-2"
-                                                >
-                                                    <button
-                                                        @click="
-                                                            router.visit(
-                                                                route(
-                                                                    'books.show',
-                                                                    book.id
-                                                                )
-                                                            )
-                                                        "
-                                                        class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-                                                    >
-                                                        View
-                                                    </button>
-                                                    <a
-                                                        v-if="isSuperAdmin"
-                                                        :href="`/storage/${book.path}`"
-                                                        target="_blank"
-                                                        class="rounded-md border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                                                        @click.stop
-                                                    >
-                                                        Download
-                                                    </a>
-                                                    <button
-                                                        @click.stop="
-                                                            deleteBook(book)
-                                                        "
-                                                        class="rounded-md border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
-                                                        :disabled="loading"
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div
-                                v-if="pagination"
-                                class="flex flex-col items-center justify-between gap-4 border-t border-gray-100 px-6 py-4 text-sm text-gray-600 sm:flex-row"
-                            >
-                                <div>
-                                    Page {{ pagination.page }} of
-                                    {{ pagination.totalPages ?? 1 }}
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <button
-                                        @click="goToPage(pagination.page - 1)"
-                                        class="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50"
-                                        :disabled="
-                                            loading || pagination.page === 1
-                                        "
-                                    >
-                                        Previous
-                                    </button>
-                                    <button
-                                        @click="goToPage(pagination.page + 1)"
-                                        class="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50"
-                                        :disabled="
-                                            loading ||
-                                            pagination.page ===
-                                                pagination.totalPages
-                                        "
-                                    >
-                                        Next
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                            <ArrowDownTrayIcon class="h-5 w-5" />
+                        </button>
+                        <button
+                            @click="handleView(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                            title="View Details"
+                        >
+                            <EyeIcon class="h-5 w-5" />
+                        </button>
+                        <button
+                            @click="handleEdit(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                            title="Edit"
+                        >
+                            <PencilIcon class="h-5 w-5" />
+                        </button>
+                        <button
+                            @click="handleDelete(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-red-600 transition-colors"
+                            title="Delete"
+                        >
+                            <TrashIcon class="h-5 w-5" />
+                        </button>
                     </div>
+                </template>
+            </AdvancedTable>
 
-                    <div
-                        class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-                    >
-                        <h3 class="text-lg font-semibold text-gray-900">
-                            Upload New Book
-                        </h3>
-                        <p class="mt-1 text-sm text-gray-500">
-                            Share teaching materials and reference PDFs with
-                            staff.
-                        </p>
-                        <div class="mt-4 space-y-4">
-                            <div>
-                                <label
-                                    class="block text-sm font-medium text-gray-700"
-                                >
-                                    Title
-                                </label>
-                                <input
-                                    v-model="newBook.title"
-                                    type="text"
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                    placeholder="Enter book title"
-                                />
-                            </div>
-                            <div>
-                                <label
-                                    class="block text-sm font-medium text-gray-700"
-                                >
-                                    PDF File
-                                </label>
-                                <input
-                                    ref="fileInput"
-                                    type="file"
-                                    accept=".pdf,.doc,.docx,.ppt,.pptx"
-                                    @change="handleFileChange"
-                                    class="mt-1 block w-full text-sm text-gray-700"
-                                />
-                                <p class="mt-1 text-xs text-gray-500">
-                                    Maximum size 10MB. Supported formats: PDF,
-                                    DOC(X), PPT(X).
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                @click="uploadBook"
-                                class="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                                :disabled="
-                                    loading || !newBook.title || !newBook.file
-                                "
-                            >
-                                Upload
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            <!-- Loading State -->
+            <div v-else class="space-y-4">
+                <div class="h-64 rounded-xl bg-gray-200 animate-pulse"></div>
             </div>
         </div>
     </AuthenticatedLayout>

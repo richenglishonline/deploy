@@ -1,219 +1,255 @@
 <script setup>
-import { reactive, ref, onMounted } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { ref, onMounted } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import api from '@/lib/api';
+import AdvancedTable from '@/Components/ui/AdvancedTable.vue';
 import Button from '@/Components/ui/Button.vue';
-import { BookOpenIcon, FolderOpenIcon } from '@heroicons/vue/24/outline';
+import Card from '@/Components/ui/Card.vue';
+import Badge from '@/Components/ui/Badge.vue';
+import {
+    PlusIcon,
+    EyeIcon,
+    PencilIcon,
+    TrashIcon,
+    BookOpenIcon,
+    RectangleStackIcon,
+    AcademicCapIcon,
+} from '@heroicons/vue/24/outline';
+import api from '@/lib/api';
 
+const page = usePage();
 const loading = ref(false);
-const books = ref([]);
-const pagination = ref(null);
+const curriculum = ref([]);
 
-const filters = reactive({
-    search: '',
-    level: '',
-    is_active: '',
-    page: 1,
-    limit: 20,
-});
+const columns = [
+    {
+        key: 'title',
+        label: 'Curriculum',
+        sortable: true,
+    },
+    {
+        key: 'level',
+        label: 'Level',
+        sortable: true,
+        align: 'center',
+    },
+    {
+        key: 'books_count',
+        label: 'Books',
+        sortable: true,
+        align: 'center',
+    },
+    {
+        key: 'students_count',
+        label: 'Students',
+        sortable: true,
+        align: 'center',
+    },
+    {
+        key: 'status',
+        label: 'Status',
+        sortable: true,
+        align: 'center',
+    },
+    {
+        key: 'created_at',
+        label: 'Created',
+        sortable: true,
+        format: 'date',
+    },
+];
 
-const fetchCurricula = async () => {
+const fetchCurriculum = async () => {
     loading.value = true;
     try {
-        const { data } = await api.get('/curriculum', { params: filters });
-        books.value = data.curricula;
-        pagination.value = data.pagination;
+        const { data } = await api.get('/curriculum');
+        curriculum.value = Array.isArray(data.curriculums || data) ? (data.curriculums || data).map(item => ({
+            ...item,
+            books_count: item.books?.length || 0,
+            students_count: item.students?.length || 0,
+            status: item.status || 'active',
+        })) : [];
     } catch (error) {
-        console.error('Error fetching curricula:', error);
+        console.error('Error fetching curriculum:', error);
+        curriculum.value = [];
     } finally {
         loading.value = false;
     }
 };
 
-const goToPage = (pageNum) => {
-    if (!pagination.value) return;
-    if (pageNum < 1 || pageNum > pagination.value.totalPages) return;
-    filters.page = pageNum;
-    fetchCurricula();
+const handleCreate = () => {
+    router.visit('/super-admin/curriculum/create');
 };
 
-const resetFilters = () => {
-    filters.search = '';
-    filters.level = '';
-    filters.is_active = '';
-    filters.page = 1;
-    fetchCurricula();
+const handleView = (row) => {
+    router.visit(`/super-admin/curriculum/${row.id}`);
 };
 
-onMounted(fetchCurricula);
+const handleEdit = (row) => {
+    router.visit(`/super-admin/curriculum/${row.id}/edit`);
+};
+
+const handleDelete = async (item) => {
+    if (!confirm(`Are you sure you want to delete "${item.title}"?`)) return;
+    
+    try {
+        await api.delete(`/curriculum/${item.id}`);
+        await fetchCurriculum();
+    } catch (error) {
+        console.error('Error deleting curriculum:', error);
+        alert('Failed to delete curriculum');
+    }
+};
+
+onMounted(() => {
+    fetchCurriculum();
+});
 </script>
 
 <template>
-    <Head title="Curriculum Access" />
-
+    <Head title="Curriculum Management" />
+    
     <AuthenticatedLayout>
-        <template #header>
+        <div class="space-y-6 pb-8">
+            <!-- Page Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                        Curriculum Access
-                    </h2>
-                    <p class="text-sm text-gray-500">
-                        Manage curriculum resources and access control.
+                    <h1 class="text-3xl font-bold text-gray-900">Curriculum Management</h1>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Organize and manage curriculum content
                     </p>
                 </div>
-                <Button
-                    @click="fetchCurricula"
-                    :disabled="loading"
-                >
-                    Refresh
+                <Button @click="handleCreate" variant="primary">
+                    <PlusIcon class="h-5 w-5 mr-2" />
+                    Create Curriculum
                 </Button>
             </div>
-        </template>
 
-        <div class="py-10">
-            <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
-                <!-- Filters -->
-                <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <form class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Search
-                            </label>
-                            <input
-                                v-model="filters.search"
-                                type="text"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                placeholder="Search by title or description"
-                            />
+                            <p class="text-sm font-medium text-gray-600">Total Curriculums</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ curriculum.length }}
+                            </p>
                         </div>
+                        <div class="rounded-lg bg-blue-50 p-3">
+                            <RectangleStackIcon class="h-8 w-8 text-blue-600" />
+                        </div>
+                    </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Level
-                            </label>
-                            <select
-                                v-model="filters.level"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            >
-                                <option value="">All Levels</option>
-                                <option value="Beginner">Beginner</option>
-                                <option value="Intermediate">Intermediate</option>
-                                <option value="Advanced">Advanced</option>
-                            </select>
+                            <p class="text-sm font-medium text-gray-600">Total Books</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ curriculum.reduce((sum, c) => sum + (c.books_count || 0), 0) }}
+                            </p>
                         </div>
+                        <div class="rounded-lg bg-green-50 p-3">
+                            <BookOpenIcon class="h-8 w-8 text-green-600" />
+                        </div>
+                    </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Status
-                            </label>
-                            <select
-                                v-model="filters.is_active"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            >
-                                <option value="">All</option>
-                                <option value="true">Active</option>
-                                <option value="false">Inactive</option>
-                            </select>
+                            <p class="text-sm font-medium text-gray-600">Students Enrolled</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ curriculum.reduce((sum, c) => sum + (c.students_count || 0), 0) }}
+                            </p>
                         </div>
-                        <div class="flex items-end gap-3 sm:col-span-2 lg:col-span-3">
-                            <button
-                                type="button"
-                                @click="fetchCurricula"
-                                class="flex-1 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                                :disabled="loading"
-                            >
-                                Apply Filters
-                            </button>
-                            <button
-                                type="button"
-                                @click="resetFilters"
-                                class="flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                                :disabled="loading"
-                            >
-                                Reset
-                            </button>
+                        <div class="rounded-lg bg-purple-50 p-3">
+                            <AcademicCapIcon class="h-8 w-8 text-purple-600" />
                         </div>
-                    </form>
-                </div>
+                    </div>
+                </Card>
+            </div>
 
-                <!-- Curriculum Grid -->
-                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                    <div
-                        v-for="curriculum in books"
-                        :key="curriculum.id"
-                        class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                        @click="router.visit(route('curriculum.index'))"
+            <!-- Curriculum Table -->
+            <AdvancedTable
+                v-if="!loading"
+                title="All Curriculums"
+                :columns="columns"
+                :data="curriculum"
+                :searchable="true"
+                :paginated="true"
+                :exportable="true"
+                :items-per-page="25"
+                row-key="id"
+            >
+                <template #cell-title="{ row }">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600">
+                            <RectangleStackIcon class="h-5 w-5 text-white" />
+                        </div>
+                        <span class="font-medium text-gray-900">{{ row.title || 'Untitled' }}</span>
+                    </div>
+                </template>
+
+                <template #cell-level="{ row }">
+                    <Badge 
+                        :variant="row.level === 'beginner' ? 'primary' : row.level === 'intermediate' ? 'warning' : 'success'"
                     >
-                        <div class="flex items-start gap-4">
-                            <div class="flex-shrink-0">
-                                <BookOpenIcon class="h-8 w-8 text-indigo-600" />
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <h3 class="text-lg font-semibold text-gray-900">
-                                        {{ curriculum.title }}
-                                    </h3>
-                                    <span
-                                        v-if="curriculum.is_active"
-                                        class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800"
-                                    >
-                                        Active
-                                    </span>
-                                </div>
-                                <p v-if="curriculum.description" class="text-sm text-gray-500 line-clamp-2 mb-2">
-                                    {{ curriculum.description }}
-                                </p>
-                                <div class="flex items-center gap-4 text-xs text-gray-500">
-                                    <span v-if="curriculum.level">{{ curriculum.level }}</span>
-                                    <span v-if="curriculum.duration_minutes">{{ curriculum.duration_minutes }} min</span>
-                                </div>
-                                <div class="mt-4">
-                                    <Button
-                                        @click.stop="router.visit(route('curriculum.index'))"
-                                        variant="outline"
-                                        size="sm"
-                                    >
-                                        View Details
-                                    </Button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                        {{ row.level || 'N/A' }}
+                    </Badge>
+                </template>
 
-                <div v-if="!loading && books.length === 0" class="text-center py-12">
-                    <FolderOpenIcon class="mx-auto h-12 w-12 text-gray-400" />
-                    <h3 class="mt-2 text-sm font-medium text-gray-900">No curriculum found</h3>
-                    <p class="mt-1 text-sm text-gray-500">Create a new curriculum to get started.</p>
-                </div>
+                <template #cell-books_count="{ row }">
+                    <Badge variant="secondary">
+                        <BookOpenIcon class="h-3 w-3 mr-1 inline" />
+                        {{ row.books_count || 0 }}
+                    </Badge>
+                </template>
 
-                <div
-                    v-if="pagination"
-                    class="flex flex-col items-center justify-between gap-4 border-t border-gray-200 px-6 py-4 text-sm text-gray-600 sm:flex-row"
-                >
-                    <div>
-                        Page {{ pagination.page }} of
-                        {{ pagination.totalPages ?? 1 }}
-                    </div>
-                    <div class="flex items-center gap-2">
+                <template #cell-students_count="{ row }">
+                    <Badge variant="secondary">
+                        <AcademicCapIcon class="h-3 w-3 mr-1 inline" />
+                        {{ row.students_count || 0 }}
+                    </Badge>
+                </template>
+
+                <template #cell-status="{ row }">
+                    <Badge :variant="row.status === 'active' ? 'success' : 'secondary'">
+                        {{ row.status || 'active' }}
+                    </Badge>
+                </template>
+
+                <template #row-actions="{ row }">
+                    <div class="flex items-center justify-end gap-2">
                         <button
-                            @click="goToPage(pagination.page - 1)"
-                            class="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50"
-                            :disabled="loading || pagination.page === 1"
+                            @click="handleView(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                            title="View Details"
                         >
-                            Previous
+                            <EyeIcon class="h-5 w-5" />
                         </button>
                         <button
-                            @click="goToPage(pagination.page + 1)"
-                            class="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50"
-                            :disabled="loading || pagination.page === pagination.totalPages"
+                            @click="handleEdit(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                            title="Edit"
                         >
-                            Next
+                            <PencilIcon class="h-5 w-5" />
+                        </button>
+                        <button
+                            @click="handleDelete(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-red-600 transition-colors"
+                            title="Delete"
+                        >
+                            <TrashIcon class="h-5 w-5" />
                         </button>
                     </div>
-                </div>
+                </template>
+            </AdvancedTable>
+
+            <!-- Loading State -->
+            <div v-else class="space-y-4">
+                <div class="h-64 rounded-xl bg-gray-200 animate-pulse"></div>
             </div>
         </div>
     </AuthenticatedLayout>
 </template>
-

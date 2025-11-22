@@ -1,24 +1,19 @@
 <script setup>
-import { reactiveOmit } from "@vueuse/core";
-import { DialogDescription, useForwardProps } from "reka-ui";
-import { cn } from "@/lib/utils";
+import { DialogDescription as RadixDialogDescription } from 'radix-vue';
+import { cn } from '@/lib/utils';
 
 const props = defineProps({
   asChild: { type: Boolean, required: false },
   as: { type: null, required: false },
   class: { type: null, required: false },
 });
-
-const delegatedProps = reactiveOmit(props, "class");
-
-const forwardedProps = useForwardProps(delegatedProps);
 </script>
 
 <template>
-  <DialogDescription
-    v-bind="forwardedProps"
-    :class="cn('text-sm text-muted-foreground', props.class)"
+  <RadixDialogDescription
+    :as-child="asChild"
+    :class="cn('text-sm text-gray-500', props.class)"
   >
     <slot />
-  </DialogDescription>
+  </RadixDialogDescription>
 </template>

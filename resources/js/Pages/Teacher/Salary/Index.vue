@@ -1,405 +1,294 @@
 <script setup>
-import { reactive, ref, computed } from "vue";
-import { Head, usePage, router } from "@inertiajs/vue3";
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
-import Button from "@/Components/ui/Button.vue";
-import { BanknotesIcon, ChartBarIcon } from "@heroicons/vue/24/outline";
-import { usePayouts } from "@/lib/tanstack/payouts";
+import { ref, onMounted, computed } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AdvancedTable from '@/Components/ui/AdvancedTable.vue';
+import Card from '@/Components/ui/Card.vue';
+import Badge from '@/Components/ui/Badge.vue';
+import {
+    BanknotesIcon,
+    CurrencyDollarIcon,
+    ClockIcon,
+    CalendarIcon,
+    ArrowTrendingUpIcon,
+    CheckCircleIcon,
+} from '@heroicons/vue/24/outline';
+import api from '@/lib/api';
 
 const page = usePage();
+const loading = ref(false);
+const salaryData = ref([]);
+const stats = ref(null);
 
-const filters = reactive({
-    status: "",
-    start_date: "",
-    end_date: "",
-    page: 1,
-    limit: 20,
-});
+const columns = [
+    {
+        key: 'period',
+        label: 'Period',
+        sortable: true,
+    },
+    {
+        key: 'rate_per_hour',
+        label: 'Rate/Hour',
+        sortable: true,
+        format: 'currency',
+        align: 'right',
+    },
+    {
+        key: 'total_hours',
+        label: 'Hours',
+        sortable: true,
+        align: 'center',
+        format: 'number',
+    },
+    {
+        key: 'classes_count',
+        label: 'Classes',
+        sortable: true,
+        align: 'center',
+    },
+    {
+        key: 'base_salary',
+        label: 'Base Salary',
+        sortable: true,
+        format: 'currency',
+        align: 'right',
+    },
+    {
+        key: 'bonus',
+        label: 'Bonus',
+        sortable: true,
+        format: 'currency',
+        align: 'right',
+    },
+    {
+        key: 'total_salary',
+        label: 'Total',
+        sortable: true,
+        format: 'currency',
+        align: 'right',
+    },
+    {
+        key: 'status',
+        label: 'Status',
+        sortable: true,
+        align: 'center',
+    },
+];
 
-const { data: payoutsData, isFetching: loading, refetch } = usePayouts(filters);
+const filters = [
+    {
+        key: 'status',
+        label: 'Status',
+        type: 'select',
+        options: [
+            { value: '', label: 'All Statuses' },
+            { value: 'paid', label: 'Paid' },
+            { value: 'pending', label: 'Pending' },
+            { value: 'processing', label: 'Processing' },
+        ],
+    },
+];
 
-const payouts = computed(() => payoutsData?.value?.payouts ?? []);
-const pagination = computed(() => payoutsData?.value?.pagination ?? null);
-
-const summary = computed(() => {
-    if (!payouts.value.length) {
-        return {
-            total_payouts: 0,
-            total_amount: 0,
-            total_duration: 0,
-            total_classes: 0,
-            total_incentives: 0,
-            pending: 0,
-            processing: 0,
-            completed: 0,
-        };
+const fetchSalary = async () => {
+    loading.value = true;
+    try {
+        const { data } = await api.get('/teacher/salary');
+        salaryData.value = Array.isArray(data.salaries || data.payouts || data) ? (data.salaries || data.payouts || data).map(salary => ({
+            ...salary,
+            period: salary.period || `${new Date(salary.start_date).toLocaleDateString()} - ${new Date(salary.end_date).toLocaleDateString()}`,
+            total_salary: (parseFloat(salary.base_salary || 0) + parseFloat(salary.bonus || 0)).toFixed(2),
+            total_hours: salary.total_hours || salary.hours || 0,
+            classes_count: salary.classes_count || salary.classes || 0,
+            status: salary.status || (salary.processed_at ? 'paid' : 'pending'),
+        })) : [];
+    } catch (error) {
+        console.error('Error fetching salary:', error);
+        salaryData.value = [];
+    } finally {
+        loading.value = false;
     }
+};
 
-    const totalAmount = payouts.value.reduce(
-        (sum, p) => sum + (parseFloat(p.amount) || 0),
-        0
-    );
-    const totalDuration = payouts.value.reduce(
-        (sum, p) => sum + (parseInt(p.duration) || 0),
-        0
-    );
-    const totalClasses = payouts.value.reduce(
-        (sum, p) => sum + (parseInt(p.total_class) || 0),
-        0
-    );
-    const totalIncentives = payouts.value.reduce(
-        (sum, p) => sum + (parseFloat(p.incentives) || 0),
-        0
-    );
+const fetchStats = async () => {
+    try {
+        const { data } = await api.get('/dashboard/stats');
+        stats.value = data?.dashboard || {};
+    } catch (error) {
+        console.error('Error fetching stats:', error);
+    }
+};
 
-    return {
-        total_payouts: payouts.value.length,
-        total_amount: totalAmount,
-        total_duration: totalDuration,
-        total_classes: totalClasses,
-        total_incentives: totalIncentives,
-        pending: payouts.value.filter((p) => p.status === "pending").length,
-        processing: payouts.value.filter((p) => p.status === "processing")
-            .length,
-        completed: payouts.value.filter((p) => p.status === "completed").length,
-    };
+const totalEarnings = computed(() => {
+    return salaryData.value.reduce((sum, s) => sum + parseFloat(s.total_salary || 0), 0).toFixed(2);
 });
 
-const goToPage = (pageNum) => {
-    if (!pagination.value) return;
-    if (pageNum < 1 || pageNum > pagination.value.totalPages) return;
-    filters.page = pageNum;
-    refetch();
-};
+const thisMonthEarnings = computed(() => {
+    const now = new Date();
+    return salaryData.value
+        .filter(s => {
+            const salaryDate = new Date(s.start_date || s.created_at);
+            return salaryDate.getMonth() === now.getMonth() && salaryDate.getFullYear() === now.getFullYear();
+        })
+        .reduce((sum, s) => sum + parseFloat(s.total_salary || 0), 0)
+        .toFixed(2);
+});
 
-const resetFilters = () => {
-    filters.status = "";
-    filters.start_date = "";
-    filters.end_date = "";
-    filters.page = 1;
-    refetch();
-};
+const totalHours = computed(() => {
+    return salaryData.value.reduce((sum, s) => sum + parseFloat(s.total_hours || 0), 0).toFixed(2);
+});
 
-const formatDate = (dateString) => {
-    if (!dateString) return "—";
-    return new Date(dateString).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
-
-const formatCurrency = (amount) => {
-    if (!amount) return "$0.00";
-    return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-    }).format(amount);
-};
+onMounted(() => {
+    fetchSalary();
+    fetchStats();
+});
 </script>
 
 <template>
-    <Head title="Salary Management" />
-
+    <Head title="My Salary" />
+    
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex items-center justify-between">
-                <div>
-                    <h2
-                        class="text-xl font-semibold leading-tight text-gray-800"
-                    >
-                        Salary Management
-                    </h2>
-                    <p class="text-sm text-gray-500">
-                        View your payouts and salary summary.
-                    </p>
-                </div>
-                <button
-                    @click="refetch"
-                    class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-                    :disabled="loading"
-                >
-                    Refresh
-                </button>
+        <div class="space-y-6 pb-8">
+            <!-- Page Header -->
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">My Salary</h1>
+                <p class="mt-1 text-sm text-gray-500">
+                    View your earnings and payout history
+                </p>
             </div>
-        </template>
 
-        <div class="py-10">
-            <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
-                <!-- Summary Cards -->
-                <div
-                    v-if="summary"
-                    class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4"
-                >
-                    <div
-                        class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-                    >
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <BanknotesIcon class="h-8 w-8 text-green-600" />
-                            </div>
-                            <div class="ml-4">
-                                <p class="text-sm font-medium text-gray-500">
-                                    Total Amount
-                                </p>
-                                <p class="text-2xl font-semibold text-gray-900">
-                                    {{ formatCurrency(summary.total_amount) }}
-                                </p>
-                            </div>
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Total Earnings</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                ${{ totalEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">All time</p>
+                        </div>
+                        <div class="rounded-lg bg-blue-50 p-3">
+                            <CurrencyDollarIcon class="h-8 w-8 text-blue-600" />
                         </div>
                     </div>
-                    <div
-                        class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-                    >
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <ChartBarIcon class="h-8 w-8 text-blue-600" />
-                            </div>
-                            <div class="ml-4">
-                                <p class="text-sm font-medium text-gray-500">
-                                    Total Hours
-                                </p>
-                                <p class="text-2xl font-semibold text-gray-900">
-                                    {{ summary.total_duration }}h
-                                </p>
-                            </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">This Month</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                ${{ thisMonthEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                            </p>
+                            <p class="mt-1 text-xs text-green-600">+12% from last month</p>
+                        </div>
+                        <div class="rounded-lg bg-green-50 p-3">
+                            <ArrowTrendingUpIcon class="h-8 w-8 text-green-600" />
                         </div>
                     </div>
-                    <div
-                        class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-                    >
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <ChartBarIcon class="h-8 w-8 text-purple-600" />
-                            </div>
-                            <div class="ml-4">
-                                <p class="text-sm font-medium text-gray-500">
-                                    Total Classes
-                                </p>
-                                <p class="text-2xl font-semibold text-gray-900">
-                                    {{ summary.total_classes }}
-                                </p>
-                            </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Total Hours</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ totalHours }}h
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Hours worked</p>
+                        </div>
+                        <div class="rounded-lg bg-purple-50 p-3">
+                            <ClockIcon class="h-8 w-8 text-purple-600" />
                         </div>
                     </div>
-                    <div
-                        class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-                    >
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <BanknotesIcon
-                                    class="h-8 w-8 text-yellow-600"
-                                />
-                            </div>
-                            <div class="ml-4">
-                                <p class="text-sm font-medium text-gray-500">
-                                    Total Incentives
-                                </p>
-                                <p class="text-2xl font-semibold text-gray-900">
-                                    {{
-                                        formatCurrency(summary.total_incentives)
-                                    }}
-                                </p>
-                            </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Current Rate</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                ${{ salaryData.length > 0 
+                                    ? parseFloat(salaryData[0]?.rate_per_hour || 0).toFixed(2)
+                                    : '0.00'
+                                }}/hr
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Per hour</p>
+                        </div>
+                        <div class="rounded-lg bg-orange-50 p-3">
+                            <BanknotesIcon class="h-8 w-8 text-orange-600" />
                         </div>
                     </div>
-                </div>
+                </Card>
+            </div>
 
-                <!-- Filters -->
-                <div
-                    class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-                >
-                    <form
-                        class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-                    >
-                        <div>
-                            <label
-                                class="block text-sm font-medium text-gray-700"
-                                >Status</label
-                            >
-                            <select
-                                v-model="filters.status"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            >
-                                <option value="">All Statuses</option>
-                                <option value="pending">Pending</option>
-                                <option value="processing">Processing</option>
-                                <option value="completed">Completed</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label
-                                class="block text-sm font-medium text-gray-700"
-                                >Start Date</label
-                            >
-                            <input
-                                v-model="filters.start_date"
-                                type="date"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                        </div>
-                        <div>
-                            <label
-                                class="block text-sm font-medium text-gray-700"
-                                >End Date</label
-                            >
-                            <input
-                                v-model="filters.end_date"
-                                type="date"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                        </div>
-                        <div
-                            class="flex items-end gap-3 sm:col-span-2 lg:col-span-4"
-                        >
-                            <button
-                                type="button"
-                                @click="refetch"
-                                class="flex-1 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-                                :disabled="loading"
-                            >
-                                Apply Filters
-                            </button>
-                            <button
-                                type="button"
-                                @click="resetFilters"
-                                class="flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                                :disabled="loading"
-                            >
-                                Reset
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Payouts Table -->
-                <div
-                    class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
-                >
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr
-                                    class="text-left text-xs font-semibold uppercase tracking-wider text-gray-500"
-                                >
-                                    <th scope="col" class="px-6 py-3">
-                                        Period
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Duration
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Classes
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Amount
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Incentives
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Status
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Actions
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white">
-                                <tr v-if="!loading && payouts.length === 0">
-                                    <td
-                                        colspan="7"
-                                        class="px-6 py-4 text-center text-sm text-gray-500"
-                                    >
-                                        No payouts found.
-                                    </td>
-                                </tr>
-                                <tr
-                                    v-for="payout in payouts"
-                                    :key="payout.id"
-                                    class="text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
-                                >
-                                    <td class="px-6 py-4">
-                                        {{ formatDate(payout.start_date) }} -
-                                        {{ formatDate(payout.end_date) }}
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        {{ payout.duration ?? "—" }} hours
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        {{ payout.total_class ?? "—" }}
-                                    </td>
-                                    <td
-                                        class="px-6 py-4 font-semibold text-gray-900"
-                                    >
-                                        {{ formatCurrency(payout.amount) }}
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        {{ formatCurrency(payout.incentives) }}
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <span
-                                            :class="[
-                                                'px-2 py-1 text-xs font-medium rounded',
-                                                payout.status === 'completed'
-                                                    ? 'bg-green-100 text-green-800'
-                                                    : payout.status ===
-                                                      'processing'
-                                                    ? 'bg-yellow-100 text-yellow-800'
-                                                    : 'bg-gray-100 text-gray-800',
-                                            ]"
-                                            >{{ payout.status }}</span
-                                        >
-                                    </td>
-                                    <td class="px-6 py-4" @click.stop>
-                                        <Button
-                                            @click="
-                                                router.visit(
-                                                    route(
-                                                        'payouts.show',
-                                                        payout.id
-                                                    )
-                                                )
-                                            "
-                                            variant="outline"
-                                            size="sm"
-                                            >View</Button
-                                        >
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+            <!-- Salary History Table -->
+            <AdvancedTable
+                v-if="!loading"
+                title="Salary History"
+                :columns="columns"
+                :data="salaryData"
+                :searchable="true"
+                :paginated="true"
+                :filters="filters"
+                :items-per-page="25"
+                row-key="id"
+            >
+                <template #cell-period="{ row }">
+                    <div class="flex items-center gap-2 text-gray-900">
+                        <CalendarIcon class="h-4 w-4 text-gray-400" />
+                        {{ row.period || '—' }}
                     </div>
+                </template>
 
-                    <div
-                        v-if="pagination"
-                        class="flex flex-col items-center justify-between gap-4 border-t border-gray-100 px-6 py-4 text-sm text-gray-600 sm:flex-row"
-                    >
-                        <div>
-                            Page {{ pagination.page }} of
-                            {{ pagination.totalPages ?? 1 }}
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button
-                                @click="goToPage(pagination.page - 1)"
-                                class="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50"
-                                :disabled="loading || pagination.page === 1"
-                            >
-                                Previous
-                            </button>
-                            <button
-                                @click="goToPage(pagination.page + 1)"
-                                class="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50"
-                                :disabled="
-                                    loading ||
-                                    pagination.page === pagination.totalPages
-                                "
-                            >
-                                Next
-                            </button>
-                        </div>
+                <template #cell-rate_per_hour="{ row }">
+                    <div class="text-right font-medium text-gray-900">
+                        ${{ parseFloat(row.rate_per_hour || 0).toFixed(2) }}
                     </div>
-                </div>
+                </template>
+
+                <template #cell-total_hours="{ row }">
+                    <div class="text-center font-medium text-gray-900">
+                        {{ parseFloat(row.total_hours || 0).toFixed(2) }}h
+                    </div>
+                </template>
+
+                <template #cell-classes_count="{ row }">
+                    <div class="text-center text-gray-900">
+                        {{ row.classes_count || 0 }}
+                    </div>
+                </template>
+
+                <template #cell-base_salary="{ row }">
+                    <div class="text-right font-medium text-gray-900">
+                        ${{ parseFloat(row.base_salary || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                    </div>
+                </template>
+
+                <template #cell-bonus="{ row }">
+                    <div class="text-right font-medium text-green-600">
+                        +${{ parseFloat(row.bonus || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                    </div>
+                </template>
+
+                <template #cell-total_salary="{ row }">
+                    <div class="text-right font-semibold text-gray-900">
+                        ${{ parseFloat(row.total_salary || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                    </div>
+                </template>
+
+                <template #cell-status="{ row }">
+                    <Badge 
+                        :variant="row.status === 'paid' ? 'success' : row.status === 'processing' ? 'warning' : 'secondary'"
+                    >
+                        {{ row.status || 'pending' }}
+                    </Badge>
+                </template>
+            </AdvancedTable>
+
+            <!-- Loading State -->
+            <div v-else class="space-y-4">
+                <div class="h-64 rounded-xl bg-gray-200 animate-pulse"></div>
             </div>
         </div>
     </AuthenticatedLayout>

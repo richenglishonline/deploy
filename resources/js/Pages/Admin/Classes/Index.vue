@@ -1,322 +1,290 @@
 <script setup>
-import { reactive, ref, onMounted } from 'vue';
-import { Head, usePage, router } from '@inertiajs/vue3';
+import { ref, onMounted, computed } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AdvancedTable from '@/Components/ui/AdvancedTable.vue';
+import Button from '@/Components/ui/Button.vue';
+import Badge from '@/Components/ui/Badge.vue';
+import Card from '@/Components/ui/Card.vue';
+import {
+    PlusIcon,
+    EyeIcon,
+    PencilIcon,
+    CalendarIcon,
+    ClockIcon,
+    AcademicCapIcon,
+    UserGroupIcon,
+    CheckCircleIcon,
+    XCircleIcon,
+} from '@heroicons/vue/24/outline';
 import api from '@/lib/api';
 
+const page = usePage();
 const loading = ref(false);
-const rows = ref([]);
-const pagination = ref(null);
-const teacherOptions = ref([]);
-const studentOptions = ref([]);
+const classes = ref([]);
+const stats = ref(null);
 
-const filters = reactive({
-    teacher_id: '',
-    student_id: '',
-    type: '',
-    start_date: '',
-    end_date: '',
-    page: 1,
-    limit: 10,
-});
+const columns = [
+    {
+        key: 'class_info',
+        label: 'Class',
+        sortable: false,
+    },
+    {
+        key: 'teacher',
+        label: 'Teacher',
+        sortable: true,
+    },
+    {
+        key: 'student',
+        label: 'Student',
+        sortable: true,
+    },
+    {
+        key: 'book',
+        label: 'Book',
+        sortable: true,
+    },
+    {
+        key: 'schedule',
+        label: 'Schedule',
+        sortable: true,
+    },
+    {
+        key: 'status',
+        label: 'Status',
+        sortable: true,
+        align: 'center',
+    },
+];
 
-const loadFilters = async () => {
-    const [teachersRes, studentsRes] = await Promise.all([
-        api.get('/dashboard/teachers'),
-        api.get('/dashboard/students'),
-    ]);
-    teacherOptions.value = teachersRes.data;
-    studentOptions.value = studentsRes.data;
-};
+const filters = [
+    {
+        key: 'status',
+        label: 'Status',
+        type: 'select',
+        options: [
+            { value: '', label: 'All Statuses' },
+            { value: 'scheduled', label: 'Scheduled' },
+            { value: 'completed', label: 'Completed' },
+            { value: 'cancelled', label: 'Cancelled' },
+        ],
+    },
+];
 
 const fetchClasses = async () => {
     loading.value = true;
     try {
-        const { data } = await api.get('/class', { params: filters });
-        rows.value = data.classes;
-        pagination.value = data.pagination;
+        const { data } = await api.get('/admin/classes');
+        classes.value = Array.isArray(data.classes || data) ? (data.classes || data).map(cls => ({
+            ...cls,
+            teacher: cls.teacher ? `${cls.teacher.first_name || ''} ${cls.teacher.last_name || ''}`.trim() || cls.teacher.email : 'N/A',
+            student: cls.student ? `${cls.student.first_name || ''} ${cls.student.last_name || ''}`.trim() || cls.student.email : 'N/A',
+            book: cls.book?.title || 'N/A',
+            schedule: cls.start_time ? `${new Date(cls.start_time).toLocaleDateString()} ${new Date(cls.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'N/A',
+            status: cls.status || (cls.completed ? 'completed' : 'scheduled'),
+        })) : [];
     } catch (error) {
-        console.error(error);
+        console.error('Error fetching classes:', error);
+        classes.value = [];
     } finally {
         loading.value = false;
     }
 };
 
-const goToPage = (page) => {
-    if (!pagination.value) return;
-    if (page < 1 || page > pagination.value.totalPages) return;
-    filters.page = page;
-    fetchClasses();
+const fetchStats = async () => {
+    try {
+        const { data } = await api.get('/dashboard/stats');
+        stats.value = data?.stats || {};
+    } catch (error) {
+        console.error('Error fetching stats:', error);
+    }
 };
 
-const resetFilters = () => {
-    filters.teacher_id = '';
-    filters.student_id = '';
-    filters.type = '';
-    filters.start_date = '';
-    filters.end_date = '';
-    filters.page = 1;
-    fetchClasses();
+const handleCreate = () => {
+    router.visit('/admin/classes/create');
 };
 
-onMounted(async () => {
-    await loadFilters();
-    await fetchClasses();
+const handleView = (row) => {
+    router.visit(`/admin/classes/${row.id}`);
+};
+
+const handleEdit = (row) => {
+    router.visit(`/admin/classes/${row.id}/edit`);
+};
+
+onMounted(() => {
+    fetchClasses();
+    fetchStats();
 });
 </script>
 
 <template>
-    <Head title="Classes" />
-
+    <Head title="Classes Management" />
+    
     <AuthenticatedLayout>
-        <template #header>
+        <div class="space-y-6 pb-8">
+            <!-- Page Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                        Classes
-                    </h2>
-                    <p class="text-sm text-gray-500">
-                        Review upcoming schedules, recurring lessons, and make-up classes.
+                    <h1 class="text-3xl font-bold text-gray-900">Classes Management</h1>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Create and manage class schedules
                     </p>
                 </div>
-                <button
-                    @click="fetchClasses"
-                    class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                    :disabled="loading"
-                >
-                    Refresh
-                </button>
+                <div class="flex gap-3">
+                    <Button @click="() => router.visit('/admin/classes/schedule')" variant="secondary">
+                        <CalendarIcon class="h-5 w-5 mr-2" />
+                        Schedule
+                    </Button>
+                    <Button @click="handleCreate" variant="primary">
+                        <PlusIcon class="h-5 w-5 mr-2" />
+                        Create Class
+                    </Button>
+                </div>
             </div>
-        </template>
 
-        <div class="py-10">
-            <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <form class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Teacher
-                            </label>
-                            <select
-                                v-model="filters.teacher_id"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            >
-                                <option value="">Any</option>
-                                <option
-                                    v-for="teacher in teacherOptions"
-                                    :key="teacher.id"
-                                    :value="teacher.id"
-                                >
-                                    {{ teacher.name }}
-                                </option>
-                            </select>
+                            <p class="text-sm font-medium text-gray-600">Total Classes</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ classes.length }}
+                            </p>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Student
-                            </label>
-                            <select
-                                v-model="filters.student_id"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            >
-                                <option value="">Any</option>
-                                <option
-                                    v-for="student in studentOptions"
-                                    :key="student.id"
-                                    :value="student.id"
-                                >
-                                    {{ student.name }}
-                                </option>
-                            </select>
+                        <div class="rounded-lg bg-blue-50 p-3">
+                            <CalendarIcon class="h-8 w-8 text-blue-600" />
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Type
-                            </label>
-                            <select
-                                v-model="filters.type"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            >
-                                <option value="">Any</option>
-                                <option value="schedule">Schedule</option>
-                                <option value="reoccurring">Recurring</option>
-                                <option value="makeupClass">Make-up</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Start After
-                            </label>
-                            <input
-                                v-model="filters.start_date"
-                                type="date"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                End Before
-                            </label>
-                            <input
-                                v-model="filters.end_date"
-                                type="date"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                        </div>
-                        <div class="flex items-end gap-3">
-                            <button
-                                type="button"
-                                @click="fetchClasses"
-                                class="flex-1 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                                :disabled="loading"
-                            >
-                                Apply Filters
-                            </button>
-                            <button
-                                type="button"
-                                @click="resetFilters"
-                                class="flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                                :disabled="loading"
-                            >
-                                Reset
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr class="text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                    <th scope="col" class="px-6 py-3">
-                                        Class
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Schedule
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Platform
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Details
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Actions
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white">
-                                <tr v-if="!loading && rows.length === 0">
-                                    <td
-                                        colspan="5"
-                                        class="px-6 py-4 text-center text-sm text-gray-500"
-                                    >
-                                        No classes found.
-                                    </td>
-                                </tr>
-                                <tr
-                                    v-for="item in rows"
-                                    :key="item.id"
-                                    class="text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
-                                    @click="router.visit(route('classes.show', item.id))"
-                                >
-                                    <td class="px-6 py-4">
-                                        <div class="font-medium text-gray-900">
-                                            {{ item.student?.name ?? '—' }}
-                                        </div>
-                                        <div class="text-gray-500">
-                                            Teacher: {{ item.teacher?.name ?? '—' }}
-                                        </div>
-                                        <div class="text-xs text-gray-400">
-                                            Type: {{ item.type }}
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <div>
-                                            {{ item.start_date ?? '—' }}
-                                            <span class="text-xs text-gray-400">
-                                                ({{ item.start_time }} - {{ item.end_time }})
-                                            </span>
-                                        </div>
-                                        <div v-if="item.type === 'reoccurring'" class="text-xs text-gray-500">
-                                            Days: {{ item.reoccurring_days?.join(', ') ?? '—' }}
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <div class="text-sm">
-                                            Link:
-                                            <a
-                                                v-if="item.platform_link"
-                                                :href="item.platform_link"
-                                                target="_blank"
-                                                class="text-indigo-600 hover:text-indigo-500"
-                                            >
-                                                Join
-                                            </a>
-                                            <span v-else>—</span>
-                                        </div>
-                                        <div class="text-xs text-gray-500">
-                                            Duration: {{ item.duration }} mins
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <div class="space-y-1 text-xs text-gray-500">
-                                            <div v-if="item.reason">
-                                                <span class="font-semibold text-gray-600">Reason:</span>
-                                                {{ item.reason }}
-                                            </div>
-                                            <div v-if="item.note">
-                                                <span class="font-semibold text-gray-600">Note:</span>
-                                                {{ item.note }}
-                                            </div>
-                                            <div v-if="item.book">
-                                                <span class="font-semibold text-gray-600">Book:</span>
-                                                {{ item.book.title }}
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4" @click.stop>
-                                        <button
-                                            @click="router.visit(route('classes.show', item.id))"
-                                            class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-                                        >
-                                            View
-                                        </button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
                     </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Scheduled</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ classes.filter(c => c.status === 'scheduled').length }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Upcoming</p>
+                        </div>
+                        <div class="rounded-lg bg-yellow-50 p-3">
+                            <ClockIcon class="h-8 w-8 text-yellow-600" />
+                        </div>
+                    </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Completed</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ classes.filter(c => c.status === 'completed').length }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">This month</p>
+                        </div>
+                        <div class="rounded-lg bg-green-50 p-3">
+                            <CheckCircleIcon class="h-8 w-8 text-green-600" />
+                        </div>
+                    </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Cancelled</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ classes.filter(c => c.status === 'cancelled').length }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">This month</p>
+                        </div>
+                        <div class="rounded-lg bg-red-50 p-3">
+                            <XCircleIcon class="h-8 w-8 text-red-600" />
+                        </div>
+                    </div>
+                </Card>
+            </div>
 
-                    <div
-                        v-if="pagination"
-                        class="flex flex-col items-center justify-between gap-4 border-t border-gray-100 px-6 py-4 text-sm text-gray-600 sm:flex-row"
+            <!-- Classes Table -->
+            <AdvancedTable
+                v-if="!loading"
+                title="All Classes"
+                :columns="columns"
+                :data="classes"
+                :searchable="true"
+                :paginated="true"
+                :exportable="true"
+                :filters="filters"
+                :items-per-page="25"
+                row-key="id"
+            >
+                <template #cell-class_info="{ row }">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                            <CalendarIcon class="h-5 w-5 text-white" />
+                        </div>
+                        <div>
+                            <div class="font-medium text-gray-900">Class #{{ row.id || 'N/A' }}</div>
+                            <div v-if="row.duration" class="text-xs text-gray-500">{{ row.duration }} minutes</div>
+                        </div>
+                    </div>
+                </template>
+
+                <template #cell-teacher="{ row }">
+                    <div class="flex items-center gap-2">
+                        <AcademicCapIcon class="h-4 w-4 text-gray-400" />
+                        <span class="text-gray-900">{{ row.teacher }}</span>
+                    </div>
+                </template>
+
+                <template #cell-student="{ row }">
+                    <div class="flex items-center gap-2">
+                        <UserGroupIcon class="h-4 w-4 text-gray-400" />
+                        <span class="text-gray-900">{{ row.student }}</span>
+                    </div>
+                </template>
+
+                <template #cell-book="{ row }">
+                    <div class="text-gray-900">{{ row.book || '—' }}</div>
+                </template>
+
+                <template #cell-schedule="{ row }">
+                    <div class="text-gray-900">{{ row.schedule || '—' }}</div>
+                </template>
+
+                <template #cell-status="{ row }">
+                    <Badge 
+                        :variant="row.status === 'completed' ? 'success' : row.status === 'scheduled' ? 'primary' : 'danger'"
                     >
-                        <div>
-                            Page {{ pagination.page }} of
-                            {{ pagination.totalPages ?? 1 }}
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button
-                                @click="goToPage(pagination.page - 1)"
-                                class="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50"
-                                :disabled="loading || pagination.page === 1"
-                            >
-                                Previous
-                            </button>
-                            <button
-                                @click="goToPage(pagination.page + 1)"
-                                class="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50"
-                                :disabled="loading || pagination.page === pagination.totalPages"
-                            >
-                                Next
-                            </button>
-                        </div>
+                        {{ row.status || 'scheduled' }}
+                    </Badge>
+                </template>
+
+                <template #row-actions="{ row }">
+                    <div class="flex items-center justify-end gap-2">
+                        <button
+                            @click="handleView(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                            title="View Details"
+                        >
+                            <EyeIcon class="h-5 w-5" />
+                        </button>
+                        <button
+                            @click="handleEdit(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                            title="Edit"
+                        >
+                            <PencilIcon class="h-5 w-5" />
+                        </button>
                     </div>
-                </div>
+                </template>
+            </AdvancedTable>
+
+            <!-- Loading State -->
+            <div v-else class="space-y-4">
+                <div class="h-64 rounded-xl bg-gray-200 animate-pulse"></div>
             </div>
         </div>
     </AuthenticatedLayout>
 </template>
-

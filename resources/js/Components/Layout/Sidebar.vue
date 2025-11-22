@@ -105,6 +105,16 @@ import {
     Cog6ToothIcon,
     BellIcon,
     XMarkIcon,
+    DocumentTextIcon,
+    PhotoIcon,
+    VideoCameraIcon,
+    MagnifyingGlassIcon,
+    BanknotesIcon,
+    ClockIcon,
+    EnvelopeIcon,
+    UserIcon,
+    RectangleStackIcon,
+    FunnelIcon,
 } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
@@ -152,21 +162,35 @@ const navigationSections = computed(() => {
     if (role === 'teacher') {
         return [
             {
-                label: 'Main',
+                label: 'Overview',
                 items: [
                     { name: 'Dashboard', href: '/teacher/dashboard', icon: HomeIcon },
+                    { name: 'Students', href: '/teacher/students', icon: UserGroupIcon },
                     { name: 'Schedule', href: '/teacher/schedule', icon: CalendarIcon },
-                    { name: 'Classes', href: '/teacher/classes', icon: AcademicCapIcon },
-                    { name: 'Books', href: '/teacher/books', icon: BookOpenIcon },
-                    { name: 'Attendance', href: '/teacher/attendance', icon: ClipboardDocumentListIcon },
                 ],
             },
             {
-                label: 'Other',
+                label: 'Classes & Content',
                 items: [
-                    { name: 'Recordings', href: '/teacher/recordings', icon: ChartBarIcon },
-                    { name: 'Screenshots', href: '/teacher/screenshots', icon: ChartBarIcon },
-                    { name: 'Notifications', href: '/notifications', icon: BellIcon, badge: '3' },
+                    { name: 'Classes', href: '/teacher/classes', icon: AcademicCapIcon },
+                    { name: 'Attendance', href: '/teacher/attendance', icon: ClipboardDocumentListIcon },
+                    { name: 'Books', href: '/teacher/books', icon: BookOpenIcon },
+                ],
+            },
+            {
+                label: 'Media & Resources',
+                items: [
+                    { name: 'Recordings', href: '/teacher/recordings', icon: VideoCameraIcon },
+                    { name: 'Screenshots', href: '/teacher/screenshots', icon: PhotoIcon },
+                ],
+            },
+            {
+                label: 'Account',
+                items: [
+                    { name: 'Salary', href: '/teacher/salary', icon: CurrencyDollarIcon },
+                    { name: 'Profile', href: '/profile', icon: UserIcon },
+                    { name: 'Messages', href: '/messages', icon: EnvelopeIcon },
+                    { name: 'Notifications', href: '/notifications', icon: BellIcon },
                 ],
             },
         ];
@@ -175,20 +199,50 @@ const navigationSections = computed(() => {
     if (role === 'admin') {
         return [
             {
-                label: 'Main',
+                label: 'Overview',
                 items: [
                     { name: 'Dashboard', href: '/admin/dashboard', icon: HomeIcon },
+                ],
+            },
+            {
+                label: 'User Management',
+                items: [
                     { name: 'Teachers', href: '/admin/teachers', icon: AcademicCapIcon },
                     { name: 'Students', href: '/admin/students', icon: UserGroupIcon },
+                ],
+            },
+            {
+                label: 'Classes & Scheduling',
+                items: [
                     { name: 'Classes', href: '/admin/classes', icon: CalendarIcon },
-                    { name: 'Books', href: '/admin/books', icon: BookOpenIcon },
                     { name: 'Attendance', href: '/admin/attendance', icon: ClipboardDocumentListIcon },
                 ],
             },
             {
-                label: 'Management',
+                label: 'Content & Resources',
+                items: [
+                    { name: 'Books', href: '/admin/books', icon: BookOpenIcon },
+                    { name: 'Assignments', href: '/admin/assignments', icon: DocumentTextIcon },
+                ],
+            },
+            {
+                label: 'Reports & Analytics',
                 items: [
                     { name: 'Reports', href: '/admin/reports', icon: ChartBarIcon },
+                ],
+            },
+            {
+                label: 'Financial',
+                items: [
+                    { name: 'Payouts', href: '/admin/payouts', icon: CurrencyDollarIcon },
+                ],
+            },
+            {
+                label: 'Account',
+                items: [
+                    { name: 'Profile', href: '/profile', icon: UserIcon },
+                    { name: 'Messages', href: '/messages', icon: EnvelopeIcon },
+                    { name: 'Notifications', href: '/notifications', icon: BellIcon },
                 ],
             },
         ];
@@ -197,22 +251,64 @@ const navigationSections = computed(() => {
     if (role === 'super-admin') {
         return [
             {
-                label: 'Main',
+                label: 'Overview',
                 items: [
                     { name: 'Dashboard', href: '/super-admin/dashboard', icon: HomeIcon },
-                    { name: 'Teachers', href: '/super-admin/teachers', icon: AcademicCapIcon },
-                    { name: 'Students', href: '/super-admin/students', icon: UserGroupIcon },
-                    { name: 'Classes', href: '/super-admin/classes', icon: CalendarIcon },
-                    { name: 'Books', href: '/super-admin/books', icon: BookOpenIcon },
-                    { name: 'Attendance', href: '/super-admin/attendance', icon: ClipboardDocumentListIcon },
+                    { name: 'Search', href: '/super-admin/search', icon: MagnifyingGlassIcon },
                 ],
             },
             {
-                label: 'Management',
+                label: 'User Management',
+                items: [
+                    { name: 'Admins', href: '/super-admin/admins', icon: AcademicCapIcon },
+                    { name: 'Teachers', href: '/super-admin/teachers', icon: UserGroupIcon },
+                    { name: 'Students', href: '/super-admin/students', icon: UserGroupIcon },
+                    { name: 'Applications', href: '/super-admin/teacher-applications', icon: DocumentTextIcon },
+                ],
+            },
+            {
+                label: 'Classes & Scheduling',
+                items: [
+                    { name: 'Classes', href: '/super-admin/classes', icon: CalendarIcon },
+                    { name: 'Attendance', href: '/super-admin/attendance', icon: ClipboardDocumentListIcon },
+                    { name: 'Schedule', href: '/super-admin/schedule', icon: ClockIcon },
+                ],
+            },
+            {
+                label: 'Content & Resources',
+                items: [
+                    { name: 'Books', href: '/super-admin/books', icon: BookOpenIcon },
+                    { name: 'Assignments', href: '/super-admin/assignments', icon: DocumentTextIcon },
+                    { name: 'Curriculum', href: '/super-admin/curriculum', icon: RectangleStackIcon },
+                ],
+            },
+            {
+                label: 'Media Library',
+                items: [
+                    { name: 'Recordings', href: '/super-admin/recordings', icon: VideoCameraIcon },
+                    { name: 'Screenshots', href: '/super-admin/screenshots', icon: PhotoIcon },
+                ],
+            },
+            {
+                label: 'Financial Management',
                 items: [
                     { name: 'Payouts', href: '/super-admin/payouts', icon: CurrencyDollarIcon },
+                    { name: 'Salary', href: '/super-admin/salary', icon: BanknotesIcon },
+                ],
+            },
+            {
+                label: 'System',
+                items: [
                     { name: 'Reports', href: '/super-admin/reports', icon: ChartBarIcon },
                     { name: 'Settings', href: '/super-admin/settings', icon: Cog6ToothIcon },
+                ],
+            },
+            {
+                label: 'Account',
+                items: [
+                    { name: 'Profile', href: '/profile', icon: UserIcon },
+                    { name: 'Messages', href: '/messages', icon: EnvelopeIcon },
+                    { name: 'Notifications', href: '/notifications', icon: BellIcon },
                 ],
             },
         ];
@@ -222,4 +318,5 @@ const navigationSections = computed(() => {
     return [{ items: [{ name: 'Dashboard', href: '/dashboard', icon: HomeIcon }] }];
 });
 </script>
+
 

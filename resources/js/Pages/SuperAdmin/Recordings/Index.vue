@@ -1,273 +1,376 @@
 <script setup>
-import { reactive, ref, onMounted, computed } from 'vue';
-import { Head, usePage, router } from '@inertiajs/vue3';
+import { ref, onMounted, computed } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import api from '@/lib/api';
+import AdvancedTable from '@/Components/ui/AdvancedTable.vue';
+import Card from '@/Components/ui/Card.vue';
+import Badge from '@/Components/ui/Badge.vue';
 import Button from '@/Components/ui/Button.vue';
-import { VideoCameraIcon } from '@heroicons/vue/24/outline';
+import {
+    EyeIcon,
+    TrashIcon,
+    PlayIcon,
+    VideoCameraIcon,
+    CalendarIcon,
+    ClockIcon,
+    AcademicCapIcon,
+    UserGroupIcon,
+    ArrowDownTrayIcon,
+} from '@heroicons/vue/24/outline';
+import api from '@/lib/api';
 
 const page = usePage();
-const role = computed(() => page.props.auth?.user?.role ?? 'teacher');
-const userId = computed(() => page.props.auth?.user?.id);
-
 const loading = ref(false);
-const rows = ref([]);
-const pagination = ref(null);
-const classOptions = ref([]);
+const recordings = ref([]);
+const stats = ref(null);
 
-const filters = reactive({
-    class_id: '',
-    attendance_id: '',
-    page: 1,
-    limit: 20,
-});
+const columns = [
+    {
+        key: 'title',
+        label: 'Recording',
+        sortable: true,
+    },
+    {
+        key: 'teacher',
+        label: 'Teacher',
+        sortable: true,
+    },
+    {
+        key: 'student',
+        label: 'Student',
+        sortable: true,
+    },
+    {
+        key: 'class',
+        label: 'Class',
+        sortable: true,
+    },
+    {
+        key: 'duration',
+        label: 'Duration',
+        sortable: true,
+        align: 'center',
+    },
+    {
+        key: 'file_size',
+        label: 'Size',
+        sortable: true,
+        align: 'right',
+    },
+    {
+        key: 'created_at',
+        label: 'Uploaded',
+        sortable: true,
+        format: 'date',
+    },
+];
 
-const loadFilters = async () => {
-    try {
-        // Load classes for filter dropdown
-        const { data } = await api.get('/class', {
-            params: {
-                teacher_id: role.value === 'teacher' ? userId.value : undefined,
-                limit: 100,
-            },
-        });
-        classOptions.value = data.classes || [];
-    } catch (error) {
-        console.error('Error loading filters:', error);
-    }
-};
+const filters = [
+    {
+        key: 'teacher_id',
+        label: 'Teacher',
+        type: 'select',
+        options: [
+            { value: '', label: 'All Teachers' },
+        ],
+    },
+    {
+        key: 'student_id',
+        label: 'Student',
+        type: 'select',
+        options: [
+            { value: '', label: 'All Students' },
+        ],
+    },
+];
 
 const fetchRecordings = async () => {
     loading.value = true;
     try {
-        const { data } = await api.get('/recording', { params: filters });
-        rows.value = data.recordings;
-        pagination.value = data.pagination;
+        const { data } = await api.get('/recordings');
+        recordings.value = Array.isArray(data.recordings || data) ? (data.recordings || data).map(recording => ({
+            ...recording,
+            title: recording.title || recording.file_name || 'Untitled Recording',
+            teacher: recording.teacher ? `${recording.teacher.first_name || ''} ${recording.teacher.last_name || ''}`.trim() || recording.teacher.email : 'N/A',
+            student: recording.student ? `${recording.student.first_name || ''} ${recording.student.last_name || ''}`.trim() || recording.student.email : 'N/A',
+            class: recording.class_schedule ? `Class #${recording.class_schedule.id}` : 'N/A',
+            duration: recording.duration ? `${recording.duration} min` : 'N/A',
+            file_size: recording.file_size ? `${(recording.file_size / 1024 / 1024).toFixed(2)} MB` : 'N/A',
+        })) : [];
     } catch (error) {
         console.error('Error fetching recordings:', error);
+        recordings.value = [];
     } finally {
         loading.value = false;
     }
 };
 
-const goToPage = (pageNum) => {
-    if (!pagination.value) return;
-    if (pageNum < 1 || pageNum > pagination.value.totalPages) return;
-    filters.page = pageNum;
-    fetchRecordings();
-};
-
-const resetFilters = () => {
-    filters.class_id = '';
-    filters.attendance_id = '';
-    filters.page = 1;
-    fetchRecordings();
-};
-
-const formatDate = (dateString) => {
-    if (!dateString) return '—';
-    return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-};
-
-const getRecordingUrl = (recording) => {
-    if (recording.drive?.link) {
-        return recording.drive.link;
+const fetchStats = async () => {
+    try {
+        const { data } = await api.get('/dashboard/stats');
+        stats.value = data?.stats || {};
+    } catch (error) {
+        console.error('Error fetching stats:', error);
     }
-    if (recording.path) {
-        return `/storage/${recording.path}`;
-    }
-    return null;
 };
 
-onMounted(async () => {
-    await loadFilters();
-    await fetchRecordings();
+const handleView = (row) => {
+    router.visit(`/super-admin/recordings/${row.id}`);
+};
+
+const handlePlay = async (recording) => {
+    try {
+        const response = await api.get(`/recordings/${recording.id}/play`);
+        window.open(response.data.url, '_blank');
+    } catch (error) {
+        console.error('Error playing recording:', error);
+        alert('Failed to play recording');
+    }
+};
+
+const handleDownload = async (recording) => {
+    try {
+        const response = await api.get(`/recordings/${recording.id}/download`, {
+            responseType: 'blob',
+        });
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', recording.file_name || `${recording.title}.mp4`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('Error downloading recording:', error);
+        alert('Failed to download recording');
+    }
+};
+
+const handleDelete = async (recording) => {
+    if (!confirm(`Are you sure you want to delete "${recording.title}"?`)) return;
+    
+    try {
+        await api.delete(`/recordings/${recording.id}`);
+        await fetchRecordings();
+        await fetchStats();
+    } catch (error) {
+        console.error('Error deleting recording:', error);
+        alert('Failed to delete recording');
+    }
+};
+
+const handleBulkDelete = async () => {
+    if (!confirm(`Are you sure you want to delete ${selectedRows.value.length} recording(s)?`)) return;
+    
+    try {
+        await Promise.all(selectedRows.value.map(recording => api.delete(`/recordings/${recording.id}`)));
+        selectedRows.value = [];
+        await fetchRecordings();
+        await fetchStats();
+    } catch (error) {
+        console.error('Error bulk deleting recordings:', error);
+        alert('Failed to delete some recordings');
+    }
+};
+
+const handleExport = (data) => {
+    const headers = columns.map(c => c.label).join(',');
+    const rows = data.map(row => 
+        columns.map(col => `"${row[col.key] || ''}"`).join(',')
+    ).join('\n');
+    const csv = `${headers}\n${rows}`;
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `recordings-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+};
+
+const totalStorage = computed(() => {
+    return (recordings.value.reduce((sum, r) => sum + (r.file_size ? parseFloat(r.file_size) : 0), 0) / 1024).toFixed(2);
+});
+
+onMounted(() => {
+    fetchRecordings();
+    fetchStats();
 });
 </script>
 
 <template>
-    <Head title="Recordings" />
-
+    <Head title="Recordings Library" />
+    
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex items-center justify-between">
-                <div>
-                    <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                        Recordings
-                    </h2>
-                    <p class="text-sm text-gray-500">
-                        View and manage class recordings.
-                    </p>
-                </div>
-                <button
-                    @click="fetchRecordings"
-                    class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                    :disabled="loading"
-                >
-                    Refresh
-                </button>
+        <div class="space-y-6 pb-8">
+            <!-- Page Header -->
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Recordings Library</h1>
+                <p class="mt-1 text-sm text-gray-500">
+                    Manage all class recordings
+                </p>
             </div>
-        </template>
 
-        <div class="py-10">
-            <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <form class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Class
-                            </label>
-                            <select
-                                v-model="filters.class_id"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            >
-                                <option value="">All Classes</option>
-                                <option
-                                    v-for="classItem in classOptions"
-                                    :key="classItem.id"
-                                    :value="classItem.id"
-                                >
-                                    {{ classItem.student?.name ?? 'Unknown' }} - {{ classItem.start_date }}
-                                </option>
-                            </select>
+                            <p class="text-sm font-medium text-gray-600">Total Recordings</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ recordings.length }}
+                            </p>
                         </div>
-                        <div class="flex items-end gap-3 sm:col-span-2 lg:col-span-3">
-                            <button
-                                type="button"
-                                @click="fetchRecordings"
-                                class="flex-1 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                                :disabled="loading"
-                            >
-                                Apply Filters
-                            </button>
-                            <button
-                                type="button"
-                                @click="resetFilters"
-                                class="flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                                :disabled="loading"
-                            >
-                                Reset
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr class="text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                    <th scope="col" class="px-6 py-3">
-                                        Recording
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Class
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Uploaded By
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Uploaded At
-                                    </th>
-                                    <th scope="col" class="px-6 py-3">
-                                        Actions
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white">
-                                <tr v-if="!loading && rows.length === 0">
-                                    <td
-                                        colspan="5"
-                                        class="px-6 py-4 text-center text-sm text-gray-500"
-                                    >
-                                        No recordings found.
-                                    </td>
-                                </tr>
-                                <tr
-                                    v-for="recording in rows"
-                                    :key="recording.id"
-                                    class="text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                    <td class="px-6 py-4">
-                                        <div class="flex items-center gap-2">
-                                            <VideoCameraIcon class="h-5 w-5 text-gray-400" />
-                                            <div>
-                                                <div class="font-medium text-gray-900">
-                                                    {{ recording.filename ?? 'Untitled Recording' }}
-                                                </div>
-                                                <div v-if="recording.drive?.link" class="text-xs text-gray-500">
-                                                    Google Drive
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <div v-if="recording.classSchedule">
-                                            <div class="font-medium text-gray-900">
-                                                {{ recording.classSchedule.student?.name ?? 'Unknown Student' }}
-                                            </div>
-                                            <div class="text-xs text-gray-500">
-                                                {{ recording.classSchedule.start_date }} {{ recording.classSchedule.start_time }}
-                                            </div>
-                                        </div>
-                                        <span v-else class="text-gray-400">—</span>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        {{ recording.uploader?.name ?? 'Unknown' }}
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        {{ formatDate(recording.created_at) }}
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <div class="flex items-center gap-2">
-                                            <Button
-                                                @click="router.visit(route('recordings.show', recording.id))"
-                                                variant="outline"
-                                                size="sm"
-                                            >
-                                                View
-                                            </Button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div
-                        v-if="pagination"
-                        class="flex flex-col items-center justify-between gap-4 border-t border-gray-100 px-6 py-4 text-sm text-gray-600 sm:flex-row"
-                    >
-                        <div>
-                            Page {{ pagination.page }} of
-                            {{ pagination.totalPages ?? 1 }}
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button
-                                @click="goToPage(pagination.page - 1)"
-                                class="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50"
-                                :disabled="loading || pagination.page === 1"
-                            >
-                                Previous
-                            </button>
-                            <button
-                                @click="goToPage(pagination.page + 1)"
-                                class="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50"
-                                :disabled="loading || pagination.page === pagination.totalPages"
-                            >
-                                Next
-                            </button>
+                        <div class="rounded-lg bg-blue-50 p-3">
+                            <VideoCameraIcon class="h-8 w-8 text-blue-600" />
                         </div>
                     </div>
-                </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Storage Used</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ totalStorage }} GB
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Total size</p>
+                        </div>
+                        <div class="rounded-lg bg-purple-50 p-3">
+                            <ArrowDownTrayIcon class="h-8 w-8 text-purple-600" />
+                        </div>
+                    </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">This Month</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ recordings.filter(r => {
+                                    const date = new Date(r.created_at);
+                                    const now = new Date();
+                                    return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+                                }).length }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Uploads</p>
+                        </div>
+                        <div class="rounded-lg bg-green-50 p-3">
+                            <CalendarIcon class="h-8 w-8 text-green-600" />
+                        </div>
+                    </div>
+                </Card>
+                
+                <Card class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Total Duration</p>
+                            <p class="mt-2 text-3xl font-semibold text-gray-900">
+                                {{ recordings.reduce((sum, r) => sum + (parseInt(r.duration) || 0), 0) }} min
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Combined</p>
+                        </div>
+                        <div class="rounded-lg bg-orange-50 p-3">
+                            <ClockIcon class="h-8 w-8 text-orange-600" />
+                        </div>
+                    </div>
+                </Card>
+            </div>
+
+            <!-- Recordings Table -->
+            <AdvancedTable
+                v-if="!loading"
+                title="All Recordings"
+                :columns="columns"
+                :data="recordings"
+                :searchable="true"
+                :paginated="true"
+                :selectable="true"
+                :exportable="true"
+                :filters="filters"
+                :items-per-page="25"
+                row-key="id"
+                @export="handleExport"
+                @bulk-delete="handleBulkDelete"
+            >
+                <template #cell-title="{ row }">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-pink-600">
+                            <PlayIcon class="h-5 w-5 text-white" />
+                        </div>
+                        <div>
+                            <div class="font-medium text-gray-900">{{ row.title }}</div>
+                            <div v-if="row.class" class="text-xs text-gray-500">{{ row.class }}</div>
+                        </div>
+                    </div>
+                </template>
+
+                <template #cell-teacher="{ row }">
+                    <div class="flex items-center gap-2">
+                        <AcademicCapIcon class="h-4 w-4 text-gray-400" />
+                        <span class="text-gray-900">{{ row.teacher }}</span>
+                    </div>
+                </template>
+
+                <template #cell-student="{ row }">
+                    <div class="flex items-center gap-2">
+                        <UserGroupIcon class="h-4 w-4 text-gray-400" />
+                        <span class="text-gray-900">{{ row.student }}</span>
+                    </div>
+                </template>
+
+                <template #cell-class="{ row }">
+                    <div class="text-gray-900">{{ row.class || '—' }}</div>
+                </template>
+
+                <template #cell-duration="{ row }">
+                    <Badge variant="secondary">{{ row.duration || '—' }}</Badge>
+                </template>
+
+                <template #cell-file_size="{ row }">
+                    <div class="text-right text-gray-900">{{ row.file_size || '—' }}</div>
+                </template>
+
+                <template #row-actions="{ row }">
+                    <div class="flex items-center justify-end gap-2">
+                        <button
+                            @click="handlePlay(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                            title="Play"
+                        >
+                            <PlayIcon class="h-5 w-5" />
+                        </button>
+                        <button
+                            @click="handleDownload(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-green-600 transition-colors"
+                            title="Download"
+                        >
+                            <ArrowDownTrayIcon class="h-5 w-5" />
+                        </button>
+                        <button
+                            @click="handleView(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                            title="View Details"
+                        >
+                            <EyeIcon class="h-5 w-5" />
+                        </button>
+                        <button
+                            @click="handleDelete(row)"
+                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-red-600 transition-colors"
+                            title="Delete"
+                        >
+                            <TrashIcon class="h-5 w-5" />
+                        </button>
+                    </div>
+                </template>
+            </AdvancedTable>
+
+            <!-- Loading State -->
+            <div v-else class="space-y-4">
+                <div class="h-64 rounded-xl bg-gray-200 animate-pulse"></div>
             </div>
         </div>
     </AuthenticatedLayout>
 </template>
-

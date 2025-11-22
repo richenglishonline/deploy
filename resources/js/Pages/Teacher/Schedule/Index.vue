@@ -1,171 +1,270 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
-import { Head, usePage, router } from '@inertiajs/vue3';
+import { ref, onMounted, computed } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Calendar from '@/Components/Calendar.vue';
+import Card from '@/Components/ui/Card.vue';
+import Badge from '@/Components/ui/Badge.vue';
+import {
+    CalendarIcon,
+    ClockIcon,
+    AcademicCapIcon,
+    BookOpenIcon,
+    ChevronLeftIcon,
+    ChevronRightIcon,
+} from '@heroicons/vue/24/outline';
 import api from '@/lib/api';
 
 const page = usePage();
-const role = computed(() => page.props.auth?.user?.role ?? 'teacher');
-const userId = computed(() => page.props.auth?.user?.id);
-
 const loading = ref(false);
-const classes = ref([]);
-const formattedDates = ref([]);
+const schedule = ref([]);
+const currentDate = ref(new Date());
+const selectedDate = ref(new Date());
 
-const formatClassForCalendar = (classItem) => {
-    if (!classItem.start_date) return null;
+const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-    const date = new Date(classItem.start_date);
-    const style = {
-        backgroundColor: classItem.type === 'makeupClass' ? '#ef4444' : classItem.type === 'reoccurring' ? '#8b5cf6' : '#22c55e',
-        color: 'white',
-    };
+const currentMonth = computed(() => currentDate.value.getMonth());
+const currentYear = computed(() => currentDate.value.getFullYear());
 
-    return {
-        id: classItem.id,
-        date,
-        type: classItem.type,
-        startTime: classItem.start_time,
-        endTime: classItem.end_time,
-        style,
-        onClick: (id) => {
-            if (classItem.type === 'makeupClass') {
-                router.visit(route('makeup-classes.show', id));
-            } else {
-                router.visit(route('classes.show', id));
-            }
-        },
-        onHover: (data) => {
-            return `
-                <div class="text-xs">
-                    <p class="font-semibold">${classItem.student?.name || 'Class'}</p>
-                    ${data.startTime ? `<p class="text-gray-300">${data.startTime} - ${data.endTime}</p>` : ''}
-                </div>
-            `;
-        },
-        meta: classItem,
-    };
+const daysInMonth = computed(() => {
+    return new Date(currentYear.value, currentMonth.value + 1, 0).getDate();
+});
+
+const firstDayOfMonth = computed(() => {
+    return new Date(currentYear.value, currentMonth.value, 1).getDay();
+});
+
+const calendarDays = computed(() => {
+    const days = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < firstDayOfMonth.value; i++) {
+        days.push({ date: null, classes: [] });
+    }
+
+    // Add all days of the month
+    for (let day = 1; day <= daysInMonth.value; day++) {
+        const date = new Date(currentYear.value, currentMonth.value, day);
+        const dateStr = date.toISOString().split('T')[0];
+        const dayClasses = schedule.value.filter(cls => {
+            if (!cls.start_time) return false;
+            const classDate = new Date(cls.start_time);
+            return classDate.toISOString().split('T')[0] === dateStr;
+        });
+
+        days.push({
+            date,
+            classes: dayClasses,
+            isToday: date.getTime() === today.getTime(),
+            isSelected: date.toISOString().split('T')[0] === selectedDate.value.toISOString().split('T')[0],
+        });
+    }
+
+    return days;
+});
+
+const selectedDateClasses = computed(() => {
+    const dateStr = selectedDate.value.toISOString().split('T')[0];
+    return schedule.value.filter(cls => {
+        if (!cls.start_time) return false;
+        const classDate = new Date(cls.start_time);
+        return classDate.toISOString().split('T')[0] === dateStr;
+    });
+});
+
+const previousMonth = () => {
+    currentDate.value = new Date(currentYear.value, currentMonth.value - 1, 1);
 };
 
-const fetchClasses = async () => {
+const nextMonth = () => {
+    currentDate.value = new Date(currentYear.value, currentMonth.value + 1, 1);
+};
+
+const selectDate = (day) => {
+    if (day && day.date) {
+        selectedDate.value = new Date(day.date);
+    }
+};
+
+const formatTime = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+const fetchSchedule = async () => {
     loading.value = true;
     try {
-        const params = {
-            teacher_id: role.value === 'teacher' ? userId.value : undefined,
-            limit: 1000, // Get all classes for the calendar
-        };
-        const { data } = await api.get('/class', { params });
-        classes.value = data.classes || [];
-        
-        // Format classes for calendar
-        formattedDates.value = classes.value
-            .map(formatClassForCalendar)
-            .filter(Boolean);
+        const { data } = await api.get('/teacher/classes', {
+            params: {
+                start_date: new Date(currentYear.value, currentMonth.value, 1).toISOString(),
+                end_date: new Date(currentYear.value, currentMonth.value + 1, 0).toISOString(),
+            },
+        });
+        schedule.value = Array.isArray(data.classes || data) ? (data.classes || data) : [];
     } catch (error) {
-        console.error('Error fetching classes:', error);
+        console.error('Error fetching schedule:', error);
+        schedule.value = [];
     } finally {
         loading.value = false;
     }
 };
 
-onMounted(fetchClasses);
+const handleViewClass = (classItem) => {
+    router.visit(`/teacher/classes/${classItem.id}`);
+};
+
+onMounted(() => {
+    fetchSchedule();
+});
+
+const watchCurrentDate = () => {
+    fetchSchedule();
+};
 </script>
 
 <template>
     <Head title="My Schedule" />
-
+    
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex items-center justify-between">
-                <div>
-                    <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                        My Schedule
-                    </h2>
-                    <p class="text-sm text-gray-500">
-                        View all your classes in a calendar format.
-                    </p>
-                </div>
-                <button
-                    @click="fetchClasses"
-                    class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                    :disabled="loading"
-                >
-                    Refresh
-                </button>
+        <div class="space-y-6 pb-8">
+            <!-- Page Header -->
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">My Schedule</h1>
+                <p class="mt-1 text-sm text-gray-500">
+                    View your upcoming classes and schedule
+                </p>
             </div>
-        </template>
 
-        <div class="py-10">
-            <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
-                <div v-if="loading" class="text-center py-12">
-                    <p class="text-gray-500">Loading schedule...</p>
+            <!-- Calendar View -->
+            <Card class="p-6">
+                <!-- Calendar Header -->
+                <div class="mb-6 flex items-center justify-between">
+                    <button
+                        @click="previousMonth"
+                        class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                    >
+                        <ChevronLeftIcon class="h-5 w-5" />
+                    </button>
+                    <h2 class="text-xl font-semibold text-gray-900">
+                        {{ months[currentMonth] }} {{ currentYear }}
+                    </h2>
+                    <button
+                        @click="nextMonth"
+                        class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                    >
+                        <ChevronRightIcon class="h-5 w-5" />
+                    </button>
                 </div>
 
-                <div v-else class="space-y-6">
-                    <!-- Calendar -->
-                    <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                        <Calendar :dates="formattedDates" size="full" />
+                <!-- Calendar Grid -->
+                <div class="grid grid-cols-7 gap-2">
+                    <!-- Day Headers -->
+                    <div
+                        v-for="day in daysOfWeek"
+                        :key="day"
+                        class="py-2 text-center text-xs font-semibold uppercase text-gray-500"
+                    >
+                        {{ day }}
                     </div>
 
-                    <!-- Legend -->
-                    <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Legend</h3>
-                        <div class="flex flex-wrap gap-4">
-                            <div class="flex items-center gap-2">
-                                <div class="w-4 h-4 rounded bg-green-500"></div>
-                                <span class="text-sm text-gray-700">Scheduled Classes</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <div class="w-4 h-4 rounded bg-purple-500"></div>
-                                <span class="text-sm text-gray-700">Recurring Classes</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <div class="w-4 h-4 rounded bg-red-500"></div>
-                                <span class="text-sm text-gray-700">Makeup Classes</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Upcoming Classes List -->
-                    <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Upcoming Classes</h3>
-                        <div v-if="classes.length === 0" class="text-center py-8 text-gray-500">
-                            No classes scheduled.
-                        </div>
-                        <div v-else class="space-y-2">
-                            <div
-                                v-for="classItem in classes.slice(0, 10)"
-                                :key="classItem.id"
-                                class="flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer"
-                                @click="classItem.type === 'makeupClass' ? router.visit(route('makeup-classes.show', classItem.id)) : router.visit(route('classes.show', classItem.id))"
+                    <!-- Calendar Days -->
+                    <div
+                        v-for="(day, index) in calendarDays"
+                        :key="index"
+                        :class="[
+                            'min-h-[80px] rounded-lg border-2 p-2 transition-colors cursor-pointer',
+                            day.date ? 'border-gray-200 hover:border-blue-300 hover:bg-blue-50' : 'border-transparent',
+                            day.isToday ? 'border-blue-500 bg-blue-50' : '',
+                            day.isSelected ? 'border-blue-600 bg-blue-100 ring-2 ring-blue-500' : '',
+                        ]"
+                        @click="selectDate(day)"
+                    >
+                        <div v-if="day.date" class="flex flex-col gap-1">
+                            <span
+                                :class="[
+                                    'text-sm font-medium',
+                                    day.isToday ? 'text-blue-600' : 'text-gray-900',
+                                ]"
                             >
-                                <div>
-                                    <div class="font-medium text-gray-900">
-                                        {{ classItem.student?.name || 'Unknown Student' }}
-                                    </div>
-                                    <div class="text-sm text-gray-500">
-                                        {{ classItem.start_date }} {{ classItem.start_time }} - {{ classItem.end_time }}
-                                    </div>
+                                {{ day.date.getDate() }}
+                            </span>
+                            <div class="flex flex-col gap-1">
+                                <div
+                                    v-for="(classItem, i) in day.classes.slice(0, 2)"
+                                    :key="i"
+                                    class="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-900"
+                                >
+                                    {{ formatTime(classItem.start_time) }}
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    <span
-                                        :class="[
-                                            'px-2 py-1 text-xs font-medium rounded',
-                                            classItem.type === 'makeupClass' ? 'bg-red-100 text-red-800' :
-                                            classItem.type === 'reoccurring' ? 'bg-purple-100 text-purple-800' :
-                                            'bg-green-100 text-green-800',
-                                        ]"
-                                    >
-                                        {{ classItem.type }}
+                                <div
+                                    v-if="day.classes.length > 2"
+                                    class="text-xs text-gray-500"
+                                >
+                                    +{{ day.classes.length - 2 }} more
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Card>
+
+            <!-- Selected Date Classes -->
+            <Card v-if="selectedDateClasses.length > 0" class="p-6">
+                <h3 class="mb-4 text-lg font-semibold text-gray-900">
+                    Classes on {{ selectedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }}
+                </h3>
+                <div class="space-y-3">
+                    <div
+                        v-for="classItem in selectedDateClasses"
+                        :key="classItem.id"
+                        @click="handleViewClass(classItem)"
+                        class="flex items-center justify-between rounded-lg border border-gray-200 p-4 hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-colors"
+                    >
+                        <div class="flex items-center gap-4">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                                <ClockIcon class="h-6 w-6 text-white" />
+                            </div>
+                            <div>
+                                <div class="font-medium text-gray-900">
+                                    {{ classItem.student ? `${classItem.student.first_name || ''} ${classItem.student.last_name || ''}`.trim() || classItem.student.email : 'Student' }}
+                                </div>
+                                <div class="mt-1 flex items-center gap-4 text-sm text-gray-500">
+                                    <span class="flex items-center gap-1">
+                                        <ClockIcon class="h-4 w-4" />
+                                        {{ formatTime(classItem.start_time) }} - {{ formatTime(classItem.end_time) }}
+                                    </span>
+                                    <span v-if="classItem.book" class="flex items-center gap-1">
+                                        <BookOpenIcon class="h-4 w-4" />
+                                        {{ classItem.book.title || 'No book' }}
                                     </span>
                                 </div>
                             </div>
                         </div>
+                        <Badge
+                            :variant="classItem.status === 'completed' ? 'success' : classItem.status === 'scheduled' ? 'primary' : 'warning'"
+                        >
+                            {{ classItem.status || 'scheduled' }}
+                        </Badge>
                     </div>
                 </div>
+            </Card>
+
+            <!-- Empty State -->
+            <Card v-else-if="!loading" class="p-12 text-center">
+                <CalendarIcon class="mx-auto h-12 w-12 text-gray-300" />
+                <p class="mt-4 text-sm font-medium text-gray-900">No classes scheduled</p>
+                <p class="mt-1 text-sm text-gray-500">
+                    No classes on {{ selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) }}
+                </p>
+            </Card>
+
+            <!-- Loading State -->
+            <div v-if="loading" class="space-y-4">
+                <div class="h-96 rounded-xl bg-gray-200 animate-pulse"></div>
             </div>
         </div>
     </AuthenticatedLayout>
 </template>
-

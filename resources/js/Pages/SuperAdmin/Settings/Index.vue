@@ -1,33 +1,45 @@
 <script setup>
-import { reactive, ref, onMounted, computed } from 'vue';
-import { Head } from '@inertiajs/vue3';
+import { ref, reactive, onMounted } from 'vue';
+import { Head, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Card from '@/Components/ui/Card.vue';
 import Button from '@/Components/ui/Button.vue';
+import FormField from '@/Components/ui/FormField.vue';
+import Badge from '@/Components/ui/Badge.vue';
+import {
+    Cog6ToothIcon,
+    BellIcon,
+    EnvelopeIcon,
+    ShieldCheckIcon,
+    ServerIcon,
+    GlobeAltIcon,
+    CheckCircleIcon,
+} from '@heroicons/vue/24/outline';
 import api from '@/lib/api';
-import { Cog6ToothIcon } from '@heroicons/vue/24/outline';
 
+const page = usePage();
 const loading = ref(false);
 const saving = ref(false);
-const settings = ref([]);
-const pagination = ref(null);
-const groupedSettings = computed(() => {
-    const groups = {};
-    settings.value.forEach(setting => {
-        const group = setting.group || 'general';
-        if (!groups[group]) {
-            groups[group] = [];
-        }
-        groups[group].push(setting);
-    });
-    return groups;
+const settings = ref({});
+
+const formData = reactive({
+    site_name: '',
+    site_email: '',
+    site_url: '',
+    timezone: 'UTC',
+    date_format: 'Y-m-d',
+    currency: 'USD',
+    maintenance_mode: false,
+    email_notifications: true,
+    system_notifications: true,
 });
 
 const fetchSettings = async () => {
     loading.value = true;
     try {
-        const { data } = await api.get('/settings', { params: { limit: 100 } });
-        settings.value = data.settings;
-        pagination.value = data.pagination;
+        const { data } = await api.get('/settings');
+        Object.assign(formData, data.settings || data || {});
+        settings.value = data.settings || data || {};
     } catch (error) {
         console.error('Error fetching settings:', error);
     } finally {
@@ -35,15 +47,12 @@ const fetchSettings = async () => {
     }
 };
 
-const handleSave = async () => {
+const saveSettings = async () => {
     saving.value = true;
     try {
-        const settingsToUpdate = settings.value.map(s => ({
-            key: s.key,
-            value: s.value,
-        }));
-        await api.post('/settings/bulk-update', { settings: settingsToUpdate });
-        alert('Settings saved successfully!');
+        await api.put('/settings', formData);
+        alert('Settings saved successfully');
+        await fetchSettings();
     } catch (error) {
         console.error('Error saving settings:', error);
         alert('Failed to save settings');
@@ -52,111 +61,192 @@ const handleSave = async () => {
     }
 };
 
-const getInputType = (type) => {
-    switch (type) {
-        case 'number':
-            return 'number';
-        case 'boolean':
-            return 'checkbox';
-        default:
-            return 'text';
+const testEmail = async () => {
+    try {
+        await api.post('/settings/test-email');
+        alert('Test email sent successfully');
+    } catch (error) {
+        console.error('Error sending test email:', error);
+        alert('Failed to send test email');
     }
 };
 
-const getInputValue = (setting) => {
-    if (setting.type === 'boolean') {
-        return setting.value === '1' || setting.value === 'true' || setting.value === true;
-    }
-    return setting.value || '';
-};
-
-const updateSetting = (setting, value) => {
-    if (setting.type === 'boolean') {
-        setting.value = value ? '1' : '0';
-    } else {
-        setting.value = value;
-    }
-};
-
-onMounted(fetchSettings);
+onMounted(() => {
+    fetchSettings();
+});
 </script>
 
 <template>
-    <Head title="Settings" />
-
+    <Head title="System Settings" />
+    
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex items-center justify-between">
-                <div>
-                    <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                        System Settings
-                    </h2>
-                    <p class="text-sm text-gray-500">
-                        Configure system-wide settings and preferences.
-                    </p>
+        <div class="space-y-6 pb-8">
+            <!-- Page Header -->
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">System Settings</h1>
+                <p class="mt-1 text-sm text-gray-500">
+                    Configure global system settings
+                </p>
+            </div>
+
+            <!-- General Settings -->
+            <Card class="p-6">
+                <div class="mb-6 flex items-center gap-3">
+                    <div class="rounded-lg bg-blue-50 p-2">
+                        <Cog6ToothIcon class="h-6 w-6 text-blue-600" />
+                    </div>
+                    <h2 class="text-xl font-semibold text-gray-900">General Settings</h2>
                 </div>
-                <Button
-                    @click="handleSave"
-                    :disabled="saving"
-                >
+                
+                <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <FormField
+                        v-model="formData.site_name"
+                        label="Site Name"
+                        placeholder="Rich English Learning Platform"
+                        hint="The name displayed throughout the platform"
+                    />
+                    
+                    <FormField
+                        v-model="formData.site_email"
+                        label="Site Email"
+                        type="email"
+                        placeholder="admin@richenglish.com"
+                        hint="Default email for system notifications"
+                    />
+                    
+                    <FormField
+                        v-model="formData.site_url"
+                        label="Site URL"
+                        placeholder="https://richenglish.com"
+                        hint="Base URL of the application"
+                    />
+                    
+                    <FormField
+                        v-model="formData.timezone"
+                        label="Timezone"
+                        placeholder="UTC"
+                        hint="Default timezone for the system"
+                    />
+                    
+                    <FormField
+                        v-model="formData.date_format"
+                        label="Date Format"
+                        placeholder="Y-m-d"
+                        hint="Default date format (e.g., Y-m-d, m/d/Y)"
+                    />
+                    
+                    <FormField
+                        v-model="formData.currency"
+                        label="Currency"
+                        placeholder="USD"
+                        hint="Default currency code"
+                    />
+                </div>
+            </Card>
+
+            <!-- System Settings -->
+            <Card class="p-6">
+                <div class="mb-6 flex items-center gap-3">
+                    <div class="rounded-lg bg-purple-50 p-2">
+                        <ServerIcon class="h-6 w-6 text-purple-600" />
+                    </div>
+                    <h2 class="text-xl font-semibold text-gray-900">System Settings</h2>
+                </div>
+                
+                <div class="space-y-4">
+                    <label class="flex items-center gap-3">
+                        <input
+                            v-model="formData.maintenance_mode"
+                            type="checkbox"
+                            class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div>
+                            <span class="text-sm font-medium text-gray-900">Maintenance Mode</span>
+                            <p class="text-xs text-gray-500">Enable to put the site in maintenance mode</p>
+                        </div>
+                    </label>
+                </div>
+            </Card>
+
+            <!-- Notification Settings -->
+            <Card class="p-6">
+                <div class="mb-6 flex items-center gap-3">
+                    <div class="rounded-lg bg-green-50 p-2">
+                        <BellIcon class="h-6 w-6 text-green-600" />
+                    </div>
+                    <h2 class="text-xl font-semibold text-gray-900">Notification Settings</h2>
+                </div>
+                
+                <div class="space-y-4">
+                    <label class="flex items-center gap-3">
+                        <input
+                            v-model="formData.email_notifications"
+                            type="checkbox"
+                            class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div>
+                            <span class="text-sm font-medium text-gray-900">Email Notifications</span>
+                            <p class="text-xs text-gray-500">Enable email notifications system-wide</p>
+                        </div>
+                    </label>
+                    
+                    <label class="flex items-center gap-3">
+                        <input
+                            v-model="formData.system_notifications"
+                            type="checkbox"
+                            class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div>
+                            <span class="text-sm font-medium text-gray-900">System Notifications</span>
+                            <p class="text-xs text-gray-500">Enable in-app notifications</p>
+                        </div>
+                    </label>
+                </div>
+                
+                <div class="mt-6">
+                    <Button @click="testEmail" variant="secondary">
+                        <EnvelopeIcon class="h-4 w-4 mr-2" />
+                        Send Test Email
+                    </Button>
+                </div>
+            </Card>
+
+            <!-- Security Settings -->
+            <Card class="p-6">
+                <div class="mb-6 flex items-center gap-3">
+                    <div class="rounded-lg bg-red-50 p-2">
+                        <ShieldCheckIcon class="h-6 w-6 text-red-600" />
+                    </div>
+                    <h2 class="text-xl font-semibold text-gray-900">Security Settings</h2>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between rounded-lg border border-gray-200 p-4">
+                        <div>
+                            <p class="text-sm font-medium text-gray-900">Session Timeout</p>
+                            <p class="text-xs text-gray-500">Automatic logout after inactivity</p>
+                        </div>
+                        <Badge variant="success">24 hours</Badge>
+                    </div>
+                    
+                    <div class="flex items-center justify-between rounded-lg border border-gray-200 p-4">
+                        <div>
+                            <p class="text-sm font-medium text-gray-900">Two-Factor Authentication</p>
+                            <p class="text-xs text-gray-500">Enhanced security for all users</p>
+                        </div>
+                        <Badge variant="warning">Optional</Badge>
+                    </div>
+                </div>
+            </Card>
+
+            <!-- Save Button -->
+            <div class="flex justify-end gap-3">
+                <Button variant="secondary" @click="fetchSettings">Reset</Button>
+                <Button variant="primary" @click="saveSettings" :disabled="saving">
+                    <CheckCircleIcon v-if="!saving" class="h-4 w-4 mr-2" />
                     {{ saving ? 'Saving...' : 'Save Settings' }}
                 </Button>
-            </div>
-        </template>
-
-        <div class="py-10">
-            <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
-                <div v-if="loading" class="text-center py-12 text-gray-500">Loading settings...</div>
-                <template v-else>
-                    <div
-                        v-for="(groupSettings, groupName) in groupedSettings"
-                        :key="groupName"
-                        class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-                    >
-                        <div class="flex items-center gap-4 mb-6">
-                            <Cog6ToothIcon class="h-8 w-8 text-gray-400" />
-                            <h3 class="text-lg font-semibold text-gray-900 capitalize">{{ groupName }} Settings</h3>
-                        </div>
-                        <div class="space-y-4">
-                            <div
-                                v-for="setting in groupSettings"
-                                :key="setting.id"
-                            >
-                                <label class="block text-sm font-medium text-gray-700 mb-2">
-                                    {{ setting.key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) }}
-                                    <span v-if="setting.description" class="text-xs font-normal text-gray-500 ml-2">
-                                        ({{ setting.description }})
-                                    </span>
-                                </label>
-                                <input
-                                    v-if="setting.type !== 'boolean'"
-                                    :type="getInputType(setting.type)"
-                                    :value="getInputValue(setting)"
-                                    @input="updateSetting(setting, $event.target.value)"
-                                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                />
-                                <div v-else class="flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        :checked="getInputValue(setting)"
-                                        @change="updateSetting(setting, $event.target.checked)"
-                                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                    />
-                                    <label class="ml-2 text-sm text-gray-700">
-                                        {{ getInputValue(setting) ? 'Enabled' : 'Disabled' }}
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div v-if="settings.length === 0" class="text-center py-12">
-                        <Cog6ToothIcon class="mx-auto h-12 w-12 text-gray-400" />
-                        <h3 class="mt-2 text-sm font-medium text-gray-900">No settings found</h3>
-                        <p class="mt-1 text-sm text-gray-500">Settings will appear here once created.</p>
-                    </div>
-                </template>
             </div>
         </div>
     </AuthenticatedLayout>
 </template>
-
