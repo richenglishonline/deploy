@@ -57,12 +57,6 @@
           <Link :href="route('contact')" class="text-gray-700 hover:text-blue-600 transition-colors">
             Contact
           </Link>
-          <Link
-            :href="route('login')"
-            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Teacher Login
-          </Link>
         </nav>
       </div>
 
@@ -94,12 +88,6 @@
           </Link>
           <Link :href="route('contact')" class="block px-3 py-2 text-gray-700 hover:text-blue-600 transition-colors">
             Contact
-          </Link>
-          <Link
-            :href="route('login')"
-            class="block px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Teacher Login
           </Link>
         </div>
       </div>
