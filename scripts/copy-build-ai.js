@@ -118,8 +118,8 @@ async function generateAICommitMessage(diff, files) {
             ? diff.substring(0, maxDiffLength) + '... (truncated)'
             : diff;
 
-        // Create prompt for AI
-        const prompt = `Analyze these git changes and generate a concise commit message following conventional commit format (<type>(<scope>): <subject>).
+        // Create prompt for AI (optimized for instruction-tuned models)
+        const prompt = `<s>[INST] Analyze these git changes and generate a concise commit message following conventional commit format (<type>(<scope>): <subject>).
 
 Changed files:
 ${files}
@@ -128,15 +128,18 @@ Changes:
 ${truncatedDiff}
 
 Generate only the commit message following this format: <type>(<scope>): <subject>
-Do not include any explanation or additional text, only the commit message:`;
+Do not include any explanation or additional text, only the commit message. [/INST]`;
 
         // Use Hugging Face Inference API
         // Try models in order (first available will be used)
+        // Using models that are available for inference on Hugging Face
         const FALLBACK_MODELS = [
             process.env.HF_MODEL, // User-specified model first
-            'microsoft/DialoGPT-medium', // Conversational model (free, works well)
+            'mistralai/Mistral-7B-Instruct-v0.1', // Instruction-tuned model (good for commit messages)
+            'meta-llama/Llama-3.1-8B-Instruct', // Meta's instruction-tuned model
             'google/flan-t5-base', // Instruction following (smaller, faster)
-            'distilgpt2' // Smaller GPT-2 variant
+            'microsoft/DialoGPT-medium', // Conversational model (free, works well)
+            'distilgpt2' // Smaller GPT-2 variant (fallback)
         ].filter(Boolean); // Remove undefined values
 
         // Try each model until one works
