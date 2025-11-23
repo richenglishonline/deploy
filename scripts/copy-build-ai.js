@@ -7,7 +7,7 @@
 
 // Load environment variables from .env file
 import { config } from 'dotenv';
-import { cpSync, existsSync, rmSync } from 'fs';
+import { cpSync, existsSync, rmSync, unlinkSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
@@ -22,6 +22,7 @@ config({ path: resolve(rootDir, '.env') });
 
 const sourceDir = join(rootDir, 'public', 'build');
 const targetDir = join(rootDir, 'build');
+const hotFilePath = join(rootDir, 'public', 'hot');
 
 console.log('📦 Copying build files...');
 console.log(`   From: ${sourceDir}`);
@@ -33,6 +34,12 @@ if (!existsSync(sourceDir)) {
 }
 
 try {
+    // Remove hot file if it exists (should not be in production)
+    if (existsSync(hotFilePath)) {
+        console.log('   Removing hot file...');
+        unlinkSync(hotFilePath);
+    }
+
     // Remove existing build directory if it exists
     if (existsSync(targetDir)) {
         console.log('   Removing existing build directory...');
