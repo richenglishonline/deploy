@@ -78,11 +78,13 @@ const fetchAdmins = async () => {
         const { data } = await api.get('/teacher', {
             params: { role: 'admin' },
         });
-        admins.value = Array.isArray(data) ? data.map(admin => ({
+        // API returns { teachers: [...], pagination: {...} }
+        const teachersList = Array.isArray(data.teachers) ? data.teachers : (Array.isArray(data) ? data : []);
+        admins.value = teachersList.map(admin => ({
             ...admin,
-            name: `${admin.first_name || ''} ${admin.last_name || ''}`.trim() || admin.email,
+            name: `${admin.first_name || ''} ${admin.last_name || ''}`.trim() || admin.name || admin.email,
             assigned_teachers_count: admin.assigned_teachers?.length || 0,
-        })) : [];
+        }));
     } catch (error) {
         console.error('Error fetching admins:', error);
         admins.value = [];
