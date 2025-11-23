@@ -11,18 +11,28 @@ import DialogDescription from '@/Components/ui/DialogDescription.vue';
 import DialogFooter from '@/Components/ui/DialogFooter.vue';
 import { ArrowLeftIcon, TrashIcon, UserIcon } from '@heroicons/vue/24/outline';
 
-const props = defineProps({ userId: { type: [String, Number], required: true } });
+const props = defineProps({ userId: { type: [String, Number], default: null } });
 const loading = ref(false);
 const admin = ref(null);
 const deleteDialogOpen = ref(false);
 
 const fetchAdmin = async () => {
+    // If no userId provided, redirect to index
+    if (!props.userId) {
+        router.visit('/super-admin/admins');
+        return;
+    }
+    
     loading.value = true;
     try {
         const { data } = await api.get(`/teacher/${props.userId}`);
         admin.value = data;
     } catch (error) {
         console.error('Error fetching admin:', error);
+        // If 404 or invalid, redirect to index
+        if (error.response?.status === 404) {
+            router.visit('/super-admin/admins');
+        }
     } finally {
         loading.value = false;
     }
@@ -50,7 +60,7 @@ onMounted(fetchAdmin);
         <template #header>
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-4">
-                    <button @click="router.visit(route('admins.index'))" class="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+                    <button @click="router.visit('/super-admin/admins')" class="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
                         <ArrowLeftIcon class="h-5 w-5" />
                     </button>
                     <div>

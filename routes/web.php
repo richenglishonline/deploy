@@ -282,10 +282,10 @@ Route::middleware(['auth', 'role:super-admin'])->prefix('super-admin')->name('su
     // Admins Management
     Route::get('/admins', fn () => Inertia::render('SuperAdmin/Admins/Index'))->name('admins.index');
     Route::get('/admins/create', fn () => Inertia::render('SuperAdmin/Admins/Create'))->name('admins.create');
+    Route::get('/admins/manage', fn () => Inertia::render('SuperAdmin/Admins/Manage'))->name('admins.manage');
     Route::get('/admins/{user}', function ($user) {
         return Inertia::render('SuperAdmin/Admins/Show', ['userId' => $user]);
     })->name('admins.show');
-    Route::get('/admins/manage', fn () => Inertia::render('SuperAdmin/Admins/Manage'))->name('admins.manage');
     
     // Teacher Applications
     Route::get('/teacher-applications', fn () => Inertia::render('SuperAdmin/TeacherApplications/Index'))->name('teacher-applications.index');
